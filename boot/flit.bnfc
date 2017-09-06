@@ -1,0 +1,91 @@
+comment "#";
+
+layout toplevel;
+
+layout "where", "of", ":", "=>";
+
+Program. Program ::= [Decl];
+
+terminator Decl ";";
+
+Data.   Decl ::= "data" Type "where" "{" [Con] "}";
+Effect. Decl ::= "effect" Type "where" "{" [Con] "}";
+Def.    Decl ::= "def" Name "(" [Param] ")" MaybeResultType ":" "{" [Stmt] "}" ;
+
+separator Param ",";
+
+Typed.   Param ::= Name ":" Type2;
+Untyped. Param ::= Name;
+
+separator Con ";";
+
+Nullary.  Con ::= Name;
+TypedCon. Con ::= Name ":" Type;
+ParamCon. Con ::= Name "(" [NamedType] ")" MaybeResultType;
+
+separator NamedType ",";
+
+Named.     NamedType ::= Name ":" Type2;
+Anonymous. NamedType ::= Type2;
+
+JustResult. MaybeResultType ::= "->" Type3;
+NoResult.   MaybeResultType ::=;
+
+TyEff.     Type4 ::= "<" Type ">" ;
+TyName.    Type4 ::= Name ;
+TyApp.     Type3 ::= Type3 Type4 ;
+TyArr.     Type2 ::= Type3 "->" Type2 ;
+TyTup.     Type1 ::= Type2 "," Type1 ;
+TyNameTup. Type1 ::= Name ":" Type2 "," Type1 ;
+
+coercions Type 4;
+
+NamedDef. Def ::= Name "(" [Param] ")" MaybeResultType ;
+Lambda.   Def ::= "(" [Param] ")" MaybeResultType ;
+OneParam. Def ::= Name ;
+Cont.     Def ::= ;
+
+Lit.  Expr11 ::= Integer ;
+Var.  Expr11 ::= Name ;
+Call. Expr11 ::= Name "(" [Expr] ")" ;
+DefS. Expr11 ::= "def" Def ":" "{" [Stmt] "}" ;
+Case. Expr11 ::= "case" Expr "of" "{" [Branch] "}" ;
+-- todo: case on several exprs and assignments
+Mul.  Expr7  ::= Expr7 "*"  Expr8 ;
+Div.  Expr7  ::= Expr7 "/"  Expr8 ;
+Mod.  Expr7  ::= Expr7 "%"  Expr8 ;
+Add.  Expr6  ::= Expr6 "+"  Expr7 ;
+Sub.  Expr6  ::= Expr6 "-"  Expr7 ;
+Eq.   Expr4  ::= Expr5 "==" Expr5 ;
+Ne.   Expr4  ::= Expr5 "!=" Expr5 ;
+Lt.   Expr4  ::= Expr5 "<"  Expr5 ;
+Le.   Expr4  ::= Expr5 "<=" Expr5 ;
+Gt.   Expr4  ::= Expr5 ">"  Expr5 ;
+Ge.   Expr4  ::= Expr5 ">=" Expr5 ;
+DefE. Expr1 ::= "def" Def ":" Expr;
+
+coercions Expr 11;
+
+separator Expr ",";
+
+Let.  Stmt ::= Name "=" Expr;
+Expr. Stmt ::= Expr ;
+
+separator nonempty Stmt ";" ;
+
+BranchS. Branch ::= Pat "=>" "{" [Stmt] "}" ;
+BranchE. Branch ::= Pat "=>" Expr ;
+-- todo: (pattern) guards
+-- todo: several patterns
+-- idea: @-patterns using =
+--       node(l, x, r = node(l2, x2, r2)) => ...
+
+separator nonempty Branch ";" ;
+
+separator Name "," ;
+
+PVar. Pat ::= Name ;
+PCon. Pat ::= Name "(" [Name] ")" ;
+-- todo: nested patterns
+
+position token Name (letter)(letter|digit|["!@$_-?/'"])*;

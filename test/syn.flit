@@ -1,0 +1,40 @@
+def main():
+    if(b):
+        t
+    else: if(j):
+        t2
+    else:
+        f
+
+    when(b):
+        a
+    else:
+        x
+
+    for(xs) x:
+        h(x)
+
+    a = zipWith(xs,ys) x, y:
+        f(x, y)
+
+    try:
+        m
+    catch e:
+        r(e)
+
+    while:
+        cond
+    do:
+        body
+
+    while(def: cond):
+        body
+
+    while: b > m() x:
+        apa
+
+    while: (b > x)
+    do:
+        apa
+
+

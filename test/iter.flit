@@ -1,0 +1,32 @@
+# Iterators
+
+effect iter a where
+    yield(a)
+
+def map(i: <iter a> r, f: a -> <e> b) -> <iter b, e> r:
+    case next(i) of
+        yield(a, k) => yield(f(a), map(k, f))
+        done(r) => r
+
+def sum(i: <iter int, e> r) -> <e> int:
+    case next(i) of
+        yield(x, k) => x + sum(k)
+        done(r) => 0
+
+data unit where
+    unit
+
+effect io where
+    print_int(int) -> <io> unit
+
+def onetwo():
+    yield(1)
+    yield(2)
+
+def incr(x):
+    print_int(x)
+    x + 1
+
+def main() -> <io> unit:
+    print_int(sum(def: map(onetwo, incr)))
+
