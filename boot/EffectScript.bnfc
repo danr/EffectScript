@@ -1,0 +1,104 @@
+comment "//";
+comment "/*" "*/";
+
+Program. Program::= [Decl];
+
+separator Case "";
+separator Con "";
+separator Decl "";
+separator Name ",";
+separator nonempty Type ",";
+separator TypeParam ",";
+separator Param ",";
+
+Param.          Param ::= Expr13;
+ParamWithType.  Param ::= Expr13 ":" Type;
+
+Algebraic. Decl ::= "type" DeclHead "{" [Con] "}";
+Effect.    Decl ::= "effect" DeclHead "{" [Con] "}";
+Alias.     Decl ::= "alias" DeclHead "=" Type;
+Expr.      Decl ::= Expr;
+_.         Decl ::= Decl ";";
+
+Nul.   Con ::= Name OptType;
+NulEx. Con ::= NameK [Name] ">" OptType;
+Con.   Con ::= NameP [TypeParam] ")" OptType;
+ConEx. Con ::= NameK [Name] ">(" [TypeParam] ")" OptType;
+_.     Con ::= Con ";";
+
+ExprRhs. Rhs ::= Expr3;
+DeclRhs. Rhs ::= "{" [Decl] "}";
+
+Unit.      Expr13 ::= "(" ")";
+
+Function.  Expr13 ::= "function" FunctionHead ")" OptType "{" [Decl] "}";
+Lit.       Expr13 ::= Lit;
+NameMono.  Expr13 ::= Name;
+NamePoly.  Expr13 ::= NameK [Type] ">";
+WildP.     Expr13 ::= "_";
+
+Switch.    Expr13 ::= "switch" Expr2 "{" [Case] "}";
+NSwitch.   Expr13 ::= "switch" "{" [Case] "}";
+
+Call.      Expr13 ::= NameP [Expr] ")";
+CallTy.    Expr13 ::= NameK [Type] ">(" [Expr] ")";
+Apply.     Expr13 ::= "(" Expr ")(" [Expr] ")";
+ApplyT.    Expr13 ::= "(" Expr ")<" [Type] ">";
+ApplyTE.   Expr13 ::= "(" Expr ")<" [Type] ">(" [Expr] ")";
+separator nonempty Expr ")(";
+
+Mul.  Expr7  ::= Expr7 "*"  Expr8;
+Div.  Expr7  ::= Expr7 "/"  Expr8;
+Mod.  Expr7  ::= Expr7 "%"  Expr8;
+Add.  Expr6  ::= Expr6 "+"  Expr7;
+Sub.  Expr6  ::= Expr6 "-"  Expr7;
+Eq.   Expr4  ::= Expr5 "==" Expr5;
+Ne.   Expr4  ::= Expr5 "!=" Expr5;
+Lt.   Expr4  ::= Expr5 "<"  Expr5;
+Le.   Expr4  ::= Expr5 "<=" Expr5;
+Gt.   Expr4  ::= Expr5 ">"  Expr5;
+Ge.   Expr4  ::= Expr5 ">=" Expr5;
+
+Lambda.    Expr3  ::= Expr11 "=>" Rhs;
+Let.       Expr3  ::= Expr11 "=" Rhs;
+Comma.     Expr2  ::= Expr3 "," Expr2;
+Signature. Expr   ::= Expr2 ":" Type;
+Lambda0.   Expr   ::= "{" [Decl] "}";
+
+
+coercions Expr 13;
+
+Integer. Lit ::= Integer;
+String.  Lit ::= String;
+
+Case. Case ::= "case" Expr2 ":" [Decl];
+
+NameTy.    Type3 ::= Name ;
+AppTy.     Type3 ::= NameK [Type] ">" ;
+ArrTy.     Type1 ::= Type2 "->" Type1;
+ArrTys.    Type1 ::= "(" [Type] ")" "->" Type1;
+Bang.      Type2 ::= Type2 "!" Type3;
+BangOnly.  Type2 ::= "!" Type3;
+UnitTy.    Type3 ::= "(" ")";
+
+coercions Type 3;
+
+NoTypes. OptTypeList ::= ;
+Types.   OptTypeList ::= "(" [Type] ")";
+
+NoType. OptType ::= ;
+Type.   OptType ::= ":" Type;
+
+MonoHead. DeclHead ::= Name;
+PolyHead. DeclHead ::= NameK [Name] ">";
+
+Anonymous.        FunctionHead ::= "(" [Param] ;
+MonoFunctionHead. FunctionHead ::= NameP [Param] ;
+PolyFunctionHead. FunctionHead ::= NameK [Name] ">(" [Param] ;
+
+OnlyType.  TypeParam ::= Type;
+WithName.  TypeParam ::= Name ":" Type;
+
+position token Name (letter)(letter|digit|["!@$_-?/'"])*;
+position token NameP (letter)(letter|digit|["!@$_-?/'"])*(["("]);
+position token NameK (letter)(letter|digit|["!@$_-?/'"])*(["<"]);
