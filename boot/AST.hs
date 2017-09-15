@@ -1,11 +1,27 @@
+{-# LANGUAGE TypeOperators #-}
 module AST where
 
 import Data.Function
 
 data Name = MkName { name_repr :: String, pos :: (Int, Int) }
 
-wired :: String -> MkName
-wired s = MkNamed s (0, 0)
+wired :: String -> Name
+wired s = MkName s (0, 0)
+
+trueName :: Name
+trueName = wired "true"
+
+falseName :: Name
+falseName = wired "false"
+
+doneName :: Name
+doneName = wired "done"
+
+partialName :: Name
+partialName = wired "partial"
+
+nextName :: Name
+nextName = wired "next"
 
 instance Eq Name where (==) = (==) `on` name_repr
 
@@ -39,10 +55,9 @@ without (a `With` b) = a
 without (Without a)  = a
 
 data Expr
-  = Function Name [Name] (Name `WithOptional` Type)
+  = Function Name [Name] [Pattern `WithOptional` Type] Expr
   | Lambda [Pattern] Expr
   | Let Pattern Expr
-  | Unit
   | Lit Lit
   | Bin Bin
   | Name Name
@@ -54,16 +69,18 @@ data Expr
   deriving (Eq, Ord, Show)
 
 data Pattern
-  | ConP Name [Pattern]
+  = ConP Name [Pattern]
   | NameP Name
   | Wild
+  | AssignP Name Pattern
+  | LitP Lit
   | GuardP Pattern Expr
   deriving (Eq, Ord, Show)
 
 data Case = Case [Pattern] Expr
   deriving (Eq, Ord, Show)
 
-data Lit = Integer Integer | String String
+data Lit = Integer Integer | String String | Unit
   deriving (Eq, Ord, Show)
 
 data Bin = Mul | Div | Mod | Add | Sub | Eq | Ne | Lt | Le | Gt | Ge

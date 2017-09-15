@@ -1,90 +1,294 @@
+{-# LANGUAGE ParallelListComp #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving, FlexibleContexts #-}
+
 module Interpret where
 
-data B
+import Control.Monad
+import Control.Monad.Reader
+import Control.Monad.Cont
+import Data.Maybe
+import Data.List
 
+import AST
 
-iExpr :: Expr -> Value
-iExpr e0 =
+import Data.Map (Map)
+import qualified Data.Map as M
+
+newtype I a = I (ReaderT Env (ContT Value IO) a)
+  deriving (MonadIO, MonadCont, MonadReader Env, Monad, Functor, Applicative)
+
+data Env = Env
+  { scope :: Bindings
+  , handlers :: [([Name], Value -> I Value)]
+  }
+
+wiredBindings :: Bindings
+wiredBindings =
+  M.fromList
+    [ (partialName, EffectV partialName)
+    , (trueName, boolV True)
+    , (falseName, boolV False)
+    , (wired "puts", putsBuiltin)
+    , (wired "show", showBuiltin)
+    ]
+
+extendScope :: Bindings -> I a -> I a
+extendScope bs = local (\ env -> env{scope = bs `M.union` scope env})
+
+initScope :: I a -> I a
+initScope = local (\ env -> env{scope = scope initEnv})
+
+inScope :: Bindings -> I a -> I a
+inScope bs = initScope . extendScope bs
+
+initEnv :: Env
+initEnv = Env
+  { scope = wiredBindings
+  , handlers = [([partialName], \ _ -> typeError "unhandled partial")]
+  }
+
+runI :: I Value -> IO Value
+runI (I m) = runContT (runReaderT m initEnv) return
+
+-- need to do this using iExpr to handle top-level lets
+top :: [Decl] -> I Value
+top ds = iExpr (Decls (ds ++ [Expr (Apply (Name (wired "main")) [])]))
+
+runtimeError :: String -> I Value
+runtimeError = throwError . ("Runtime error: " ++)
+
+typeError :: String -> I Value
+typeError = throwError . ("Type error: " ++)
+
+todo :: String -> I Value
+todo = throwError . ("TODO: " ++)
+
+throwError :: String -> I Value
+throwError s = callCC $ \ _ -> return (ErrV s)
+
+data Value
+  = ConV Name [Value]
+  | FunV [Pattern] Bindings Expr -- its rec group is part of the closure
+  | NextV [Name] -- ops this next handles
+  | EffectV Name -- the op this effect yields when applied to its arguments
+  | ContV (Value -> I Value) -- continuation from next
+  | BuiltinV ([Value] -> I Value) -- could be relaxed to return IO Value
+  | LitV Lit
+  | ErrV String
+
+putsBuiltin :: Value
+putsBuiltin = BuiltinV $ \ xs -> case xs of
+  [LitV (String s)] -> liftIO (putStrLn s) >> return (LitV Unit)
+  _ -> typeError "puts"
+
+showBuiltin :: Value
+showBuiltin = BuiltinV $ \ xs -> case xs of
+  [LitV x] -> return (LitV (String (showLit x)))
+  _ -> typeError "show"
+
+showLit :: Lit -> String
+showLit (String s)  = show s
+showLit (Integer i) = show i
+showLit Unit        = "()"
+
+binOp :: Bin -> Value
+binOp bop =
+  case bop of
+    Mul -> intOp (*)
+    Div -> intOp (*)
+    Mod -> intOp mod
+    Add -> intStringOp (+) (++)
+    Sub -> intOp (-)
+    Eq  -> BuiltinV $ \ xs -> case xs of [x, y] -> fromMaybe (typeError "bool value") (fmap (return . boolV) (valueEq x y))
+                                         _      -> typeError "=="
+    Ne  -> BuiltinV $ \ xs -> case xs of [x, y] -> fromMaybe (typeError "bool value") (fmap (return . boolV . not) (valueEq x y))
+                                         _      -> typeError "!="
+    Lt  -> intStringCmp (<)  (<)
+    Le  -> intStringCmp (<=) (<=)
+    Gt  -> intStringCmp (>)  (>)
+    Ge  -> intStringCmp (>=) (>=)
+
+intOp :: (Integer -> Integer -> Integer) -> Value
+intOp op = BuiltinV $ \ xs ->
+  case xs of
+    [LitV (Integer x), LitV (Integer y)] -> return $ LitV (Integer (op x y))
+    _ -> throwError "intOp"
+
+intStringOp :: (Integer -> Integer -> Integer) -> (String -> String -> String) -> Value
+intStringOp i s = BuiltinV $ \ xs ->
+  case xs of
+    [LitV (Integer x), LitV (Integer y)] -> return $ LitV (Integer (i x y))
+    [LitV (String x), LitV (String y)] -> return $ LitV (String (s x y))
+    _ -> typeError "intStringOp"
+
+intStringCmp :: (Integer -> Integer -> Bool) -> (String -> String -> Bool) -> Value
+intStringCmp i s = BuiltinV $ \ xs ->
+  case xs of
+    [LitV (Integer x), LitV (Integer y)] -> return $ boolV (i x y)
+    [LitV (String x), LitV (String y)] -> return $ boolV (s x y)
+    _ -> typeError "intStringCmp"
+
+valueEq :: Value -> Value -> Maybe Bool
+valueEq (ConV k1 vs1) (ConV k2 vs2) = Just $ k1 == k2 && length vs1 == length vs2 && maybe False and (sequence (zipWith valueEq vs1 vs2))
+valueEq (LitV x) (LitV y) = Just $ x == y
+valueEq _ _ = Nothing
+
+boolV :: Bool -> Value
+boolV True  = ConV trueName []
+boolV False = ConV falseName []
+
+-- Bindings, Scope, Closure etc
+type Bindings = Map Name Value
+
+match :: Pattern -> Value -> Maybe Bindings
+match (ConP c ps) (ConV c2 vs)
+  | c == c2 = matches ps vs
+  | otherwise = Nothing
+match Wild _ = Just M.empty
+match (NameP n) v = Just (M.singleton n v)
+match (AssignP n p) v = M.insert n v <$> match p v
+match (LitP lp) (LitV l)
+  | lp == l = Just M.empty
+  | otherwise = Nothing
+match GuardP{} _ = error "todo: Pattern guards not implemneted"
+
+matches :: [Pattern] -> [Value] -> Maybe Bindings
+matches (p:ps) (v:vs) = M.union <$> match p v <*> matches ps vs
+matches []     []     = Just M.empty
+matches _      _      = Nothing
+
+-- Run until some of these are handled
+withHandlersFor :: [Name] -> I Value -> I Value
+withHandlersFor ops m =
+  callCC $ \ k ->
+    do local (\ env -> env{ handlers = (ops, k):handlers env }) m
+
+handlerFor :: Name -> I (Value -> I Value)
+handlerFor op =
+  do (pre, (_, m):post) <- asks (span ((op `elem`) . fst) . handlers)
+     return $ \ x -> local (\ env -> env{ handlers = pre ++ post }) (m x)
+
+partialEffect :: I Value
+partialEffect = iExpr (Apply (Name partialName) [])
+
+iExpr :: Expr -> I Value
+iExpr = iExprWithInfo Nothing
+
+iExprWithInfo :: Maybe [Name] -> Expr -> I Value
+iExprWithInfo minfo e0 =
+  -- add debug output of what the scope and the context is
   case e0 of
-    Function f tvs ps ->
-      do todo "bind f to f as value (with current scope in closure)"
-         todo "return f as value"
+    Function{} -> iExpr (Decls [Expr e0])
 
     Lambda ps e ->
-      do todo "return ps -> e as value"
+      do closure <- asks scope
+         return (FunV ps closure e)
 
-    Let p e ->
-      do v <- iExpr e0
-         mbs <- match p v
-         case mbs of
-           Just bs ->
-             extendScope bs
-           Nothing ->
-             effect partialEffect
-
-    Unit ->
-      do return UnitV
+    Let{} ->
+      todo "Let not at top level: won't scope over anything (nested let not supported by interpreter)"
 
     Lit l ->
-      do return (litV l)
+      do return (LitV l)
 
     Bin b ->
-      do return (binV b)
+      do return (binOp b)
 
+    Name n | n == nextName ->
+      case minfo of
+        Just info -> return (NextV info)
+        Nothing   -> runtimeError "next must be head of a scrutinee in the untyped interpreter"
     Name n ->
-      do -- n is bound to either:
-         -- variable to Value
-         -- top-level constructor, function or effect constructor
-         v <- lookup n
-         -- on failure program is not well-scoped
+      do mv <- asks (M.lookup n . scope)
+         case mv of
+           Just v  -> return v
+           Nothing -> runtimeError $ "unbound name: " ++ name_repr n
 
-         case v of
-
-
-    Switch es cs -> -- type information for effect handlers
-      do vs <- mapM iExpr es
-         let go (Case ps rhs:cs') =
-               do mbs <- matches ps vs
+    Switch es cases ->
+      do vs <- sequence [ iExprWithInfo (Just [c | ConP c _ <- pats]) e
+                        | e <- es
+                        | pats <- transpose [ps | Case ps _ <- cases] ]
+         let go (Case ps rhs:cases') =
+               do mbs <- return $ matches ps vs
                   case mbs of
-                    Just bs ->
-                      extendScope bs
-                      iEval e
-                    Nothing -> go cs'
-             go [] = effect partialEffect
-         go cs
+                    Just bs -> extendScope bs (iExpr rhs)
+                    Nothing -> go cases'
+             go [] = partialEffect
+         go cases
 
     Apply f es ->
       do vf <- iExpr f
          vs <- mapM iExpr es
          case vf of
-           VCont m | [] <- vs -> m
-           VCont m -> todo "effects with arguments"
+           ConV k [] -> return (ConV k vs)
+           ConV k _  -> typeError "constructor already applied to arguments"
 
-           VEffect c ... ->
-             h <- handlerFor c
-             callCC $ \ k -> h (VCon c (vs ++ [VCont k])
-
-           VNext -> -- need some type information
+           ContV k ->
              case vs of
-               [VFun [] closure rhs] ->
-                 do inEnv closure $ do
-                                   -- cs the effect constructors we understand
-                      withHandlersFor cs $ do
-                         iExpr rhs
+                [v] -> k v
+                []  -> k (LitV Unit)
+                _   -> typeError "too many resume arguments"
 
-           VFun ps closure rhs ->   -- types?
-             mbs <- matches ps vs
-             case mbs of
-               Just bs ->
-                 inEnv closure $
-                   do extendScope bs
-                      iEval e
-               Nothing -> effect partialEffect
-           _ -> error "program is not well typed"
+           EffectV c ->
+             do h <- handlerFor c
+                callCC $ \ k -> h (ConV c (vs ++ [ContV k]))
+
+           NextV ops ->
+             case vs of
+               [FunV [] closure rhs] ->
+                 do inScope closure $ do
+                      withHandlersFor ops $ do
+                        (ConV doneName . (:[])) <$> iExpr rhs
+               _ -> typeError "next must be applied to one single nullary function"
+
+           FunV ps closure rhs ->
+             do mbs <- return $ matches ps vs
+                case mbs of
+                  Just bs -> inScope closure $ extendScope bs (iExpr rhs)
+                  Nothing -> partialEffect
+
+           ErrV x -> return (ErrV x)
+
+           _ -> typeError "cannot apply anything to this value"
 
     TyApply e ts ->
-      do iExpr e -- e should evaluate to something polymorphic
+      do iExpr e
 
-    Decls ds ->
-      case splitAt (length ds - 1) ds of
-        (_, []) -> error "empty list of decls (rhs)"
+    Decls ds@(d:_) | declarative d ->
+      do let (decls,expr_decls) = span declarative ds
+         closure <- asks scope
+         bs <- return $ declsScope decls closure
+         extendScope bs $ iExpr (Decls (expr_decls `orList` [last ds]))
+
+    Decls (Expr (Let p e):ds) ->
+      do v <- iExpr e
+         mb <- return $ match p v
+         case mb of
+           Just bs -> extendScope bs $ iExpr (Decls (ds `orList` [Expr e]))
+           Nothing -> partialEffect
+
+    Decls [Expr e] -> iExpr e
+
+    Decls (Expr e:ds) -> iExpr e >> iExpr (Decls ds)
+        -- this expr is just done for side effects (cannot extend scope over ds)
+
+    Decls [] -> runtimeError "empty list of decls"
+
+orList :: [a] -> [a] -> [a]
+orList [] ys = ys
+orList xs _  = xs
+
+declarative :: Decl -> Bool
+declarative (Expr Function{}) = True
+declarative (Expr _) = False
+declarative _        = True
+
+-- These are all 'declarative'
+declsScope :: [Decl] -> Bindings -> Bindings
+declsScope ds closure = us
+  where
+  us = M.fromList $
+        [ (n, FunV (map without ps) (us `M.union` closure) rhs)
+        | Expr (Function n _tvs ps rhs) <- ds ] ++
+        [ (n, ConV n []) | Algebraic _ cons <- ds, Con{con_name=n} <- cons ] ++
+        [ (n, EffectV n) | Effect _ cons <- ds, Con{con_name=n} <- cons ]
+
