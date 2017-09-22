@@ -11,10 +11,13 @@ data Showable a = Show a
 instance Show a => PP (Showable a) where
   pp (Show x) = ppDoc x
 
-data Result a b = a :<- b
+data Infix a b = Infix String a b
 
-instance (PP a, PP b) => PP (Result a b) where
-  pp (a :<- b) = pp a <+> "<- " $\ pp b
+(<--) = Infix "<-"
+(-|) = Infix "-|"
+
+instance (PP a, PP b) => PP (Infix a b) where
+  pp (Infix s a b) = pp a <+> text (s ++ " ") $\ pp b
 
 ($\) :: Doc -> Doc -> Doc
 d $\ d2 = cat [d, nest 2 d2]
@@ -82,8 +85,8 @@ instance PPrec Expr where
       `embrace` pp e
     Lambda [] e -> embrace empty (pp e)
     Lambda ps (Decls ds) -> embrace (parens (csv (map pp ps)) $\ "=>") (vcat (map pp ds))
-    Lambda ps e -> parIf (i > 12) (csv (map pp ps)) <+> "=>" $\ ppr 4 e
-    Let p e -> pp p <+> "=" $\ ppr 4 e
+    Lambda ps e -> parIf (i > 12) (csv (map pp ps)) <+> "=> " $\ ppr 4 e
+    Let p e -> pp p <+> "= " $\ ppr 4 e
     Lit l -> pp l
     Apply (Bin b) [e1,e2] -> ppr (lprec b) e1 <+> pp b <+> ppr (rprec b) e2 -- todo: precedences
     Name n -> pp n
@@ -91,7 +94,8 @@ instance PPrec Expr where
     Apply e es -> emparens (pp e) (map pp es)
     TyApply e ts -> ppr 15 e <> crocodile ts
     Decls ds -> vcat (map pp ds)
-    Sig e t -> ppr 3 e <> ":" $\ pp t
+    Sig e t -> ppr 3 e <> ": " $\ pp t
+    Bin b -> pp b
 
 prec :: Expr -> Int
 prec e = case e of
@@ -106,6 +110,7 @@ prec e = case e of
   TyApply{}  -> 14
   Lit{}      -> 15
   Name{}     -> 15
+  Bin{}      -> 15
 
 instance PP Pattern where
   pp p = case p of

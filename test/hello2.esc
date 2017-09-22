@@ -1,5 +1,3 @@
 main = ({
   puts("Hello world")
 })
-
-puts("What")

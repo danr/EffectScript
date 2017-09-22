@@ -1,5 +1,6 @@
 {-# LANGUAGE ParallelListComp #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving, FlexibleContexts #-}
+{-# LANGUAGE RecordWildCards #-}
 module Interpret where
 
 import Control.Monad
@@ -11,6 +12,7 @@ import Text.Show.Functions
 
 import AST
 import Pretty
+import Text.PrettyPrint
 
 import Data.Map (Map)
 import qualified Data.Map as M
@@ -23,6 +25,13 @@ data Env = Env
   , handlers :: [([Name], Value -> I Value)]
   }
   deriving Show
+
+instance PP Env where
+  pp Env{..} = braces $ sep $ punctuate comma
+    [ "scope: " $\ braces (vcat [ pp x <> ": " $\ pp v | (x,v) <- M.toList scope, interesting x])
+    , "handlers: " $\ brackets (csv [brackets (csv (map pp ns)) | (ns, _k) <- handlers ])
+    ]
+    where interesting x = x `M.notMember` wiredBindings
 
 wiredBindings :: Bindings
 wiredBindings =
@@ -79,17 +88,22 @@ data Value
   | ErrV String
   deriving Show
 
+instance PP Value where
+  pp (ConV k vs) = emparens (pp k) (map pp vs)
+  pp (FunV ps _ e) = pp (Function Nothing [] (map Without ps) Nothing e)
+  pp (NextV ops) = emparens "NextV" (map pp ops)
+  pp (EffectV op) = emparens "EffectV" [pp op]
+  pp (BuiltinV _) = "BuiltinV"
+  pp (LitV l) = pp l
+  pp (ErrV s) = emparens "ErrV" [text s]
+
 -- Bindings, Scope, Closure etc
 type Bindings = Map Name Value
 
-data Closure = Closure Bindings | Hidden
+data Closure = Closure Bindings
 
 instance Show Closure where
-  show Hidden = "<Hidden>"
-  show (Closure m) = show (M.map hide m)
-    where
-    hide (FunV ps _ e) = FunV ps Hidden e
-    hide v = v
+  show Closure{} = "HiddenClosure"
 
 putsBuiltin :: Value
 putsBuiltin = BuiltinV $ \ xs -> case xs of
@@ -99,7 +113,7 @@ putsBuiltin = BuiltinV $ \ xs -> case xs of
 showBuiltin :: Value
 showBuiltin = BuiltinV $ \ xs -> case xs of
   [LitV x] -> return (LitV (String (showLit x)))
-  _ -> typeError "show"
+  _ -> typeError $ "show called with " ++ show (length xs) ++ " args"
 
 showLit :: Lit -> String
 showLit (String s)  = show s
@@ -184,12 +198,12 @@ handlerFor op =
 partialEffect :: I Value
 partialEffect = iExpr (Apply (Name partialName) [])
 
-trace :: (PP a, Show b) => a -> I b -> I b
+trace :: (PP a, PP b) => a -> I b -> I b
 trace e m =
-  do liftIO $ putStrLn (pretty e)
-     (liftIO . putStrLn . pretty . Show) =<< ask
+  do env <- ask
+     liftIO $ putStrLn (pretty (e -| env))
      r <- m
-     liftIO $ putStrLn (pretty (Show r :<- e))
+     liftIO $ putStrLn (pretty (r <-- e))
      return r
 
 iExpr :: Expr -> I Value
@@ -286,18 +300,25 @@ iExprWithInfo minfo e0 =
     Decls (Expr (Let p e):ds) ->
       do v <- iExpr e
          mb <- return $ match p v
-         case mb of
+         propagateError v $ case mb of
            Just bs -> extendScope bs $ iExpr (Decls (ds `orList` [Expr e]))
            Nothing -> partialEffect
 
     Decls [Expr e] -> iExpr e
 
-    Decls (Expr e:ds) -> iExpr e >> iExpr (Decls ds)
+    Decls (Expr e:ds) ->
+      do v <- iExpr e
+         propagateError v $ iExpr (Decls ds)
         -- this expr is just done for side effects (cannot extend scope over ds)
 
     Decls [] -> return (LitV Unit)
         -- this can be the rhs of an empty block or lambda (e => {})
         -- not an empty record though :)
+
+
+propagateError :: Value -> I Value -> I Value
+propagateError v@ErrV{} _ = return v
+propagateError _ m = m
 
 orList :: [a] -> [a] -> [a]
 orList [] ys = ys

@@ -1,0 +1,5 @@
+function main() {
+  unit = ()
+  puts("test:" + show(1+2*3))
+  puts("unit:" + show(unit))
+}
