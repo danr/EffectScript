@@ -1,6 +1,5 @@
 {-# LANGUAGE ParallelListComp #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving, FlexibleContexts #-}
-
 module Interpret where
 
 import Control.Monad
@@ -11,6 +10,7 @@ import Data.List
 import Text.Show.Functions
 
 import AST
+import Pretty
 
 import Data.Map (Map)
 import qualified Data.Map as M
@@ -22,6 +22,7 @@ data Env = Env
   { scope :: Bindings
   , handlers :: [([Name], Value -> I Value)]
   }
+  deriving Show
 
 wiredBindings :: Bindings
 wiredBindings =
@@ -69,7 +70,7 @@ throwError s = callCC $ \ _ -> return (ErrV s)
 
 data Value
   = ConV Name [Value]
-  | FunV [Pattern] Bindings Expr -- its rec group is part of the closure
+  | FunV [Pattern] Closure Expr -- its rec group is part of the closure
   | NextV [Name] -- ops this next handles
   | EffectV Name -- the op this effect yields when applied to its arguments
   | ContV (Value -> I Value) -- continuation from next
@@ -77,6 +78,18 @@ data Value
   | LitV Lit
   | ErrV String
   deriving Show
+
+-- Bindings, Scope, Closure etc
+type Bindings = Map Name Value
+
+data Closure = Closure Bindings | Hidden
+
+instance Show Closure where
+  show Hidden = "<Hidden>"
+  show (Closure m) = show (M.map hide m)
+    where
+    hide (FunV ps _ e) = FunV ps Hidden e
+    hide v = v
 
 putsBuiltin :: Value
 putsBuiltin = BuiltinV $ \ xs -> case xs of
@@ -139,8 +152,6 @@ boolV :: Bool -> Value
 boolV True  = ConV trueName []
 boolV False = ConV falseName []
 
--- Bindings, Scope, Closure etc
-type Bindings = Map Name Value
 
 match :: Pattern -> Value -> Maybe Bindings
 match (ConP c ps) (ConV c2 vs)
@@ -173,18 +184,27 @@ handlerFor op =
 partialEffect :: I Value
 partialEffect = iExpr (Apply (Name partialName) [])
 
+trace :: (PP a, Show b) => a -> I b -> I b
+trace e m =
+  do liftIO $ putStrLn (pretty e)
+     (liftIO . putStrLn . pretty . Show) =<< ask
+     r <- m
+     liftIO $ putStrLn (pretty (Show r :<- e))
+     return r
+
 iExpr :: Expr -> I Value
 iExpr = iExprWithInfo Nothing
 
 iExprWithInfo :: Maybe [Name] -> Expr -> I Value
 iExprWithInfo minfo e0 =
+  trace e0 $
   -- add debug output of what the scope and the context is
   case e0 of
     Function{} -> iExpr (Decls [Expr e0])
 
     Lambda ps e ->
       do closure <- asks scope
-         return (FunV ps closure e)
+         return (FunV ps (Closure closure) e)
 
     Let{} ->
       todo "Let not at top level: won't scope over anything (nested let not supported by interpreter)"
@@ -236,13 +256,13 @@ iExprWithInfo minfo e0 =
 
            NextV ops ->
              case vs of
-               [FunV [] closure rhs] ->
+               [FunV [] (Closure closure) rhs] ->
                  do inScope closure $ do
                       withHandlersFor ops $ do
                         (ConV doneName . (:[])) <$> iExpr rhs
                _ -> typeError "next must be applied to one single nullary function"
 
-           FunV ps closure rhs ->
+           FunV ps (Closure closure) rhs ->
              do mbs <- return $ matches ps vs
                 case mbs of
                   Just bs -> inScope closure $ extendScope bs (iExpr rhs)
@@ -293,7 +313,7 @@ declsScope :: [Decl] -> Bindings -> Bindings
 declsScope ds closure = us
   where
   us = M.fromList $
-        [ (n, FunV (map without ps) (us `M.union` closure) rhs)
+        [ (n, FunV (map without ps) (Closure (us `M.union` closure)) rhs)
         | Expr (Function (Just n) _tvs ps _ rhs) <- ds ] ++
         [ (n, ConV n []) | Algebraic _ cons <- ds, Con{con_name=n} <- cons ] ++
         [ (n, EffectV n) | Effect _ cons <- ds, Con{con_name=n} <- cons ]

@@ -4,6 +4,17 @@ module Pretty where
 import AST
 import Text.PrettyPrint
 import Data.List (intersperse)
+import Text.Show.Pretty (ppDoc)
+
+data Showable a = Show a
+
+instance Show a => PP (Showable a) where
+  pp (Show x) = ppDoc x
+
+data Result a b = a :<- b
+
+instance (PP a, PP b) => PP (Result a b) where
+  pp (a :<- b) = pp a <+> "<- " $\ pp b
 
 ($\) :: Doc -> Doc -> Doc
 d $\ d2 = cat [d, nest 2 d2]

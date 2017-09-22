@@ -55,6 +55,6 @@ showTree tree =
 main :: IO ()
 main =
   do args <- getArgs
-     case args of
-       []     -> run =<< getContents
-       [file] -> run =<< readFile file
+     run =<< case args of
+       []     -> getContents
+       [file] -> readFile file
