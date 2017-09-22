@@ -101,9 +101,13 @@ newtype Commas = Commas BNF.Expr
 
 instance Tr Commas where
   type To Commas = [AST.Expr]
-  tr (Commas e) = case e of
-    BNF.Comma e1 e2 -> tr (Commas e1) ++ tr (Commas e2)
-    e -> [tr e]
+  tr = go 0
+    where
+    go :: Int -> Commas -> [AST.Expr]
+    go 0 (Commas Unit) = []
+    go i (Commas e) = case e of
+      BNF.Comma e1 e2 -> go 1 (Commas e1) ++ go 1 (Commas e2)
+      e -> [tr e]
 
 trPat :: BNF.Expr -> AST.Pattern
 trPat = pat . tr

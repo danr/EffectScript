@@ -97,7 +97,7 @@ data Bin = Mul | Div | Mod | Add | Sub | Eq | Ne | Lt | Le | Gt | Ge
 data Type
   = NameTy Name
   | TyCon Name [Type]
-  | Arrow [Type] Type [Type]
+  | Arrow [Type {- these could be named like in TS -}] Type [Type]
   deriving (Eq, Ord, Show)
 
 unitTyConName :: Name

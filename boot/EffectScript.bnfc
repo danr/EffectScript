@@ -14,7 +14,7 @@ separator Param ",";
 Algebraic. Decl ::= "type" DeclHead "{" [Con] "}";
 Effect.    Decl ::= "effect" DeclHead "{" [Con] "}";
 Alias.     Decl ::= "alias" DeclHead "=" Type;
-Expr.      Decl ::= Expr;
+Expr.      Decl ::= Expr2;
 _.         Decl ::= Decl ";";
 
 Nul.   Con ::= Name OptType;
@@ -23,52 +23,52 @@ Con.   Con ::= NameP [TypeParam] ")" OptType;
 ConEx. Con ::= NameK [Name] ">(" [TypeParam] ")" OptType;
 _.     Con ::= Con ";";
 
-ExprRhs. Rhs ::= Expr3;
+ExprRhs. Rhs ::= Expr4;
 DeclRhs. Rhs ::= "{" [Decl] "}";
 
-Unit.      Expr13 ::= "(" ")";
+Function.  Expr14 ::= "function" FunctionHead ")" OptType "{" [Decl] "}";
+Lit.       Expr14 ::= Lit;
+NameMono.  Expr14 ::= Name;
+NamePoly.  Expr14 ::= NameK [Type] ">";
+WildP.     Expr14 ::= "_";
 
-Function.  Expr13 ::= "function" FunctionHead ")" OptType "{" [Decl] "}";
-Lit.       Expr13 ::= Lit;
-NameMono.  Expr13 ::= Name;
-NamePoly.  Expr13 ::= NameK [Type] ">";
-WildP.     Expr13 ::= "_";
+Switch.    Expr14 ::= "switch" Expr3 "{" [Case] "}";
+NSwitch.   Expr14 ::= "switch" "{" [Case] "}";
 
-Switch.    Expr13 ::= "switch" Expr2 "{" [Case] "}";
-NSwitch.   Expr13 ::= "switch" "{" [Case] "}";
-
-Call.      Expr13 ::= NameP [Expr] ")";
-CallTy.    Expr13 ::= NameK [Type] ">(" [Expr] ")";
-Apply.     Expr13 ::= "(" Expr ")(" [Expr] ")";
-ApplyT.    Expr13 ::= "(" Expr ")<" [Type] ">";
-ApplyTE.   Expr13 ::= "(" Expr ")<" [Type] ">(" [Expr] ")";
+Call.      Expr14 ::= NameP [Expr] ")";
+CallTy.    Expr14 ::= NameK [Type] ">(" [Expr] ")";
+Apply.     Expr14 ::= "(" Expr ")(" [Expr] ")";
+ApplyT.    Expr14 ::= "(" Expr ")<" [Type] ">";
+ApplyTE.   Expr14 ::= "(" Expr ")<" [Type] ">(" [Expr] ")";
 separator nonempty Expr ")(";
 
-Mul.  Expr7  ::= Expr7 "*"  Expr8;
-Div.  Expr7  ::= Expr7 "/"  Expr8;
-Mod.  Expr7  ::= Expr7 "%"  Expr8;
-Add.  Expr6  ::= Expr6 "+"  Expr7;
-Sub.  Expr6  ::= Expr6 "-"  Expr7;
-Eq.   Expr4  ::= Expr5 "==" Expr5;
-Ne.   Expr4  ::= Expr5 "!=" Expr5;
-Lt.   Expr4  ::= Expr5 "<"  Expr5;
-Le.   Expr4  ::= Expr5 "<=" Expr5;
-Gt.   Expr4  ::= Expr5 ">"  Expr5;
-Ge.   Expr4  ::= Expr5 ">=" Expr5;
+Mul.  Expr8  ::= Expr8 "*"  Expr9;
+Div.  Expr8  ::= Expr8 "/"  Expr9;
+Mod.  Expr8  ::= Expr8 "%"  Expr9;
+Add.  Expr7  ::= Expr7 "+"  Expr8;
+Sub.  Expr7  ::= Expr7 "-"  Expr8;
+Eq.   Expr5  ::= Expr6 "==" Expr6;
+Ne.   Expr5  ::= Expr6 "!=" Expr6;
+Lt.   Expr5  ::= Expr6 "<"  Expr6;
+Le.   Expr5  ::= Expr6 "<=" Expr6;
+Gt.   Expr5  ::= Expr6 ">"  Expr6;
+Ge.   Expr5  ::= Expr6 ">=" Expr6;
 
-Lambda.    Expr3  ::= Expr11 "=>" Rhs;
-Let.       Expr3  ::= Expr11 "=" Rhs;
-Comma.     Expr2  ::= Expr3 "," Expr2;
-Signature. Expr   ::= Expr2 ":" Type;
-Lambda0.   Expr   ::= "{" [Decl] "}";
+Lambda.    Expr4  ::= Expr12 "=>" Rhs;
+Let.       Expr4  ::= Expr12 "=" Rhs;
+Comma.     Expr3  ::= Expr4 "," Expr3;
+Signature. Expr2  ::= Expr3 ":" Type;
+Lambda0.   Expr2  ::= "{" [Decl] "}";
+            -- ^ low to not conflict with Rhs, can be improved to have { } next to binary operators
+Unit.      Expr   ::= ;
 
 
-coercions Expr 13;
+coercions Expr 14;
 
 Integer. Lit ::= Integer;
 String.  Lit ::= String;
 
-Case. Case ::= "case" Expr2 ":" [Decl];
+Case. Case ::= "case" Expr3 ":" [Decl];
 
 NameTy.    Type3 ::= Name ;
 AppTy.     Type3 ::= NameK [Type] ">" ;
@@ -86,8 +86,8 @@ Type.   OptType ::= ":" Type;
 MonoHead. DeclHead ::= Name;
 PolyHead. DeclHead ::= NameK [Name] ">";
 
-Param.          Param ::= Expr13;
-ParamWithType.  Param ::= Expr13 ":" Type;
+Param.          Param ::= Expr14;
+ParamWithType.  Param ::= Expr14 ":" Type;
 
 Anonymous.        FunctionHead ::= "(" [Param] ;
 MonoFunctionHead. FunctionHead ::= NameP [Param] ;

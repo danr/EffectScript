@@ -271,7 +271,9 @@ iExprWithInfo minfo e0 =
     Decls (Expr e:ds) -> iExpr e >> iExpr (Decls ds)
         -- this expr is just done for side effects (cannot extend scope over ds)
 
-    Decls [] -> runtimeError "empty list of decls"
+    Decls [] -> return (LitV Unit)
+        -- this can be the rhs of an empty block or lambda (e => {})
+        -- not an empty record though :)
 
 orList :: [a] -> [a] -> [a]
 orList [] ys = ys
