@@ -23,6 +23,9 @@ partialName = wired "partial"
 nextName :: Name
 nextName = wired "next"
 
+wildName :: Name
+wildName = wired "_"
+
 instance Eq Name where (==) = (==) `on` name_repr
 
 instance Ord Name where compare = compare `on` name_repr
@@ -31,7 +34,7 @@ instance Show Name where
   show = show . name_repr
 
 data TypeHead
-  = TypeHead Name [Name]
+  = TypeHead { ty_con :: Name, ty_tvs :: [Name] }
   deriving (Eq, Ord, Show)
 
 data Decl
@@ -44,7 +47,8 @@ data Decl
 data Con
   = Con { con_name :: Name,
           con_quant :: [Name],
-          con_args :: [Type `WithOptional` Name] }
+          con_args :: [Type `WithOptional` Name],
+          con_res_ty :: Maybe Type }
   deriving (Eq, Ord, Show)
 
 data a `WithOptional` b = a `With` b | Without a
@@ -55,7 +59,7 @@ without (a `With` b) = a
 without (Without a)  = a
 
 data Expr
-  = Function Name [Name] [Pattern `WithOptional` Type] Expr
+  = Function (Maybe Name) [Name] [Pattern `WithOptional` Type] (Maybe Type) Expr
   | Lambda [Pattern] Expr
   | Let Pattern Expr
   | Lit Lit
@@ -67,6 +71,10 @@ data Expr
   | Decls [Decl]
   | Sig Expr Type
   deriving (Eq, Ord, Show)
+
+decls :: [Decl] -> Expr
+decls [Expr e] = e
+decls ds       = Decls ds
 
 data Pattern
   = ConP Name [Pattern]
@@ -91,4 +99,7 @@ data Type
   | TyCon Name [Type]
   | Arrow [Type] Type [Type]
   deriving (Eq, Ord, Show)
+
+unitTyConName :: Name
+unitTyConName = wired "Unit"
 

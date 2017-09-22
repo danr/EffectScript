@@ -11,9 +11,6 @@ separator nonempty Type ",";
 separator TypeParam ",";
 separator Param ",";
 
-Param.          Param ::= Expr13;
-ParamWithType.  Param ::= Expr13 ":" Type;
-
 Algebraic. Decl ::= "type" DeclHead "{" [Con] "}";
 Effect.    Decl ::= "effect" DeclHead "{" [Con] "}";
 Alias.     Decl ::= "alias" DeclHead "=" Type;
@@ -83,14 +80,14 @@ UnitTy.    Type3 ::= "(" ")";
 
 coercions Type 3;
 
-NoTypes. OptTypeList ::= ;
-Types.   OptTypeList ::= "(" [Type] ")";
-
 NoType. OptType ::= ;
 Type.   OptType ::= ":" Type;
 
 MonoHead. DeclHead ::= Name;
 PolyHead. DeclHead ::= NameK [Name] ">";
+
+Param.          Param ::= Expr13;
+ParamWithType.  Param ::= Expr13 ":" Type;
 
 Anonymous.        FunctionHead ::= "(" [Param] ;
 MonoFunctionHead. FunctionHead ::= NameP [Param] ;
