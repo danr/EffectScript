@@ -104,7 +104,7 @@ instance Tr Commas where
   tr = go 0
     where
     go :: Int -> Commas -> [AST.Expr]
-    go 0 (Commas Unit) = []
+    go 0 (Commas BNF.Unit) = []
     go i (Commas e) = case e of
       BNF.Comma e1 e2 -> go 1 (Commas e1) ++ go 1 (Commas e2)
       e -> [tr e]

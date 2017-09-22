@@ -55,7 +55,7 @@ Gt.   Expr5  ::= Expr6 ">"  Expr6;
 Ge.   Expr5  ::= Expr6 ">=" Expr6;
 
 Lambda.    Expr4  ::= Expr12 "=>" Rhs;
-Let.       Expr4  ::= Expr12 "=" Rhs;
+Let.       Expr4  ::= Expr12 "=" Rhs; -- this is wrong, k = { ds } should be ok and mean a lambda
 Comma.     Expr3  ::= Expr4 "," Expr3;
 Signature. Expr2  ::= Expr3 ":" Type;
 Lambda0.   Expr2  ::= "{" [Decl] "}";

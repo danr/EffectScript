@@ -6,15 +6,15 @@ import Text.PrettyPrint
 import Data.List (intersperse)
 
 ($\) :: Doc -> Doc -> Doc
-d $\ d2 = hang d 2 d2
+d $\ d2 = cat [d, nest 2 d2]
 
 infixr 2 $\
 
 embrace :: Doc -> Doc -> Doc
-embrace h b = (h <+> "{" $\ b) $$ "}"
+embrace h b = ((h <+> "{") $$ nest 2 b) $$ "}"
 
-emparens :: Doc -> Doc -> Doc
-emparens h b = (h <> "(" $\ b <> ")")
+emparens :: Doc -> [Doc] -> Doc
+emparens h bs = (h <> "(") $\ csv bs <> ")"
 
 csv :: [Doc] -> Doc
 csv = fsep . punctuate ","
@@ -31,6 +31,9 @@ class PPrec a where
 
 instance PP Name where
   pp (MkName n _) = text n
+
+pretty :: PP a => a -> String
+pretty = render . pp
 
 instance PP TypeHead where
   pp th = case th of
@@ -64,24 +67,24 @@ instance PP Expr where pp = ppr 0
 instance PPrec Expr where
   ppr i e0 = parIf (prec e0 <= i) $ case e0 of
     Function mf tvs ps mrt e ->
-      ("function" $\ emparens (mf ? id <> crocodile tvs) (csv (map pp ps)))
+      ("function" $\ emparens (mf ? (" " <>) <> crocodile tvs) (map pp ps))
       `embrace` pp e
-    Lambda [] e -> embrace (pp e) empty
-    Lambda ps (Decls ds) -> embrace (emparens (csv (map pp ps)) "=>") (vcat (map pp ds))
+    Lambda [] e -> embrace empty (pp e)
+    Lambda ps (Decls ds) -> embrace (parens (csv (map pp ps)) $\ "=>") (vcat (map pp ds))
     Lambda ps e -> parIf (i > 12) (csv (map pp ps)) <+> "=>" $\ ppr 4 e
     Let p e -> pp p <+> "=" $\ ppr 4 e
     Lit l -> pp l
     Apply (Bin b) [e1,e2] -> ppr (lprec b) e1 <+> pp b <+> ppr (rprec b) e2 -- todo: precedences
     Name n -> pp n
     Switch es cs -> ("switch" $\ csv (map pp es)) `embrace` (vcat (map pp cs))
-    Apply e es -> emparens (pp e) (csv (map pp es))
+    Apply e es -> emparens (pp e) (map pp es)
     TyApply e ts -> ppr 15 e <> crocodile ts
     Decls ds -> vcat (map pp ds)
     Sig e t -> ppr 3 e <> ":" $\ pp t
 
 prec :: Expr -> Int
 prec e = case e of
-  Decls{}    -> 0
+  Decls{}    -> 15
   Sig{}      -> 2
   Lambda{}   -> 4
   Let{}      -> 4
@@ -95,7 +98,7 @@ prec e = case e of
 
 instance PP Pattern where
   pp p = case p of
-    ConP n ps -> emparens (pp n) (csv (map pp ps))
+    ConP n ps -> emparens (pp n) (map pp ps)
     NameP n -> pp n
     Wild -> "_"
     AssignP n p -> parens (pp n <+> "=" $\ pp p)
@@ -108,7 +111,7 @@ instance PP Case where
 instance PP Lit where
   pp l = case l of
     Integer i -> integer i
-    String s -> text s
+    String s -> text (show s)
     Unit -> "()"
 
 instance PP Bin where

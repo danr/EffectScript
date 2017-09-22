@@ -8,6 +8,7 @@ import Control.Monad.Reader
 import Control.Monad.Cont
 import Data.Maybe
 import Data.List
+import Text.Show.Functions
 
 import AST
 
@@ -75,6 +76,7 @@ data Value
   | BuiltinV ([Value] -> I Value) -- could be relaxed to return IO Value
   | LitV Lit
   | ErrV String
+  deriving Show
 
 putsBuiltin :: Value
 putsBuiltin = BuiltinV $ \ xs -> case xs of
@@ -248,6 +250,8 @@ iExprWithInfo minfo e0 =
 
            ErrV x -> return (ErrV x)
 
+           BuiltinV f -> f vs
+
            _ -> typeError "cannot apply anything to this value"
 
     TyApply e ts ->
@@ -290,7 +294,7 @@ declsScope ds closure = us
   where
   us = M.fromList $
         [ (n, FunV (map without ps) (us `M.union` closure) rhs)
-        | Expr (Function n _tvs ps rhs) <- ds ] ++
+        | Expr (Function (Just n) _tvs ps _ rhs) <- ds ] ++
         [ (n, ConV n []) | Algebraic _ cons <- ds, Con{con_name=n} <- cons ] ++
         [ (n, EffectV n) | Effect _ cons <- ds, Con{con_name=n} <- cons ]
 
