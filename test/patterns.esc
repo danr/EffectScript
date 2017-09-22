@@ -1,0 +1,25 @@
+
+type List<A> {
+  Nil
+  Cons(x: A, xs: List< A> )
+}
+
+function map<A,B>(f: A -> B, xs: List<A>): List<B> {
+  switch xs {
+    case Nil(): Nil
+    case Cons(x, xs): Cons(f(x), map(f,xs))
+  }
+}
+
+function sum(xs: List<int>): List<int> {
+  switch xs {
+    case Nil(): 0
+    case Cons(x, xs): x + sum(xs)
+  }
+}
+
+y=1
+
+function main() {
+  puts(show(sum(map(x => x + y, Nil))))
+}

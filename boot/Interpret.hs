@@ -26,12 +26,22 @@ data Env = Env
   }
   deriving Show
 
+ppBindings :: Bindings -> Doc
+ppBindings bs = fsep
+  [ pp (x `With` v) | (x,v) <- M.toList bs, interesting x]
+  where interesting x = x `M.notMember` wiredBindings
+
+noFun :: Bindings -> Bindings
+noFun = M.filter (not . isFun)
+  where
+  isFun FunV{} = True
+  isFun _ = False
+
 instance PP Env where
   pp Env{..} = braces $ sep $ punctuate comma
-    [ "scope: " $\ braces (vcat [ pp x <> ": " $\ pp v | (x,v) <- M.toList scope, interesting x])
-    , "handlers: " $\ brackets (csv [brackets (csv (map pp ns)) | (ns, _k) <- handlers ])
+    [ "scope:" $\ braces (ppBindings scope)
+    , "handlers:" $\ brackets (csv [brackets (csv (map pp ns)) | (ns, _k) <- handlers ])
     ]
-    where interesting x = x `M.notMember` wiredBindings
 
 wiredBindings :: Bindings
 wiredBindings =
@@ -90,7 +100,9 @@ data Value
 
 instance PP Value where
   pp (ConV k vs) = emparens (pp k) (map pp vs)
-  pp (FunV ps _ e) = pp (Function Nothing [] (map Without ps) Nothing e)
+  pp (FunV ps (Closure closure) e) =
+    pp (Function Nothing [] (map Without ps) Nothing e) $\
+      brackets (ppBindings (noFun closure))
   pp (NextV ops) = emparens "NextV" (map pp ops)
   pp (EffectV op) = emparens "EffectV" [pp op]
   pp (BuiltinV _) = "BuiltinV"

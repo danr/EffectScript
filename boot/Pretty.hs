@@ -17,10 +17,10 @@ data Infix a b = Infix String a b
 (-|) = Infix "-|"
 
 instance (PP a, PP b) => PP (Infix a b) where
-  pp (Infix s a b) = pp a <+> text (s ++ " ") $\ pp b
+  pp (Infix s a b) = pp a <+> text s $\ pp b
 
 ($\) :: Doc -> Doc -> Doc
-d $\ d2 = cat [d, nest 2 d2]
+d $\ d2 = sep [d, nest 2 d2]
 
 infixr 2 $\
 
@@ -28,7 +28,7 @@ embrace :: Doc -> Doc -> Doc
 embrace h b = ((h <+> "{") $$ nest 2 b) $$ "}"
 
 emparens :: Doc -> [Doc] -> Doc
-emparens h bs = (h <> "(") $\ csv bs <> ")"
+emparens h bs = cat [h <> "(", nest 2 (csv bs <> ")")]
 
 csv :: [Doc] -> Doc
 csv = fsep . punctuate ","
@@ -56,15 +56,15 @@ instance PP TypeHead where
 
 instance PP Decl where
   pp d = case d of
-    Algebraic th cs -> embrace ("data" <+> vcat (map pp cs)) (vcat (map pp cs))
-    Effect th cs -> embrace ("effect" <+> vcat (map pp cs)) (vcat (map pp cs))
+    Algebraic th cs -> embrace ("type" <+> pp th) (vcat (map pp cs))
+    Effect th cs -> embrace ("effect" <+> pp th) (vcat (map pp cs))
     Alias th t -> "alias" <+> pp th <+> "=" $\ pp t
     Expr e -> pp e
 
 instance PP Con where
   pp (Con x ts as mrt) =
     pp x <> crocodile ts
-         <> parens (csv (map pp as))
+         <> parens (csv (map ppConParam as))
          <> mrt ? (":" $\)
 
 (?) :: PP a => Maybe a -> (Doc -> Doc) -> Doc
@@ -72,6 +72,10 @@ Just a  ? f = f (pp a)
 Nothing ? _ = empty
 
 infix 9 ?
+
+ppConParam :: Type `WithOptional` Name -> Doc
+ppConParam (t `With` n) = pp (n `With` t)
+ppConParam (Without a) = pp a
 
 instance (PP a, PP b) => PP (a `WithOptional` b) where
   pp (a `With` b) = pp a <> ":" $\ pp b
@@ -81,12 +85,12 @@ instance PP Expr where pp = ppr 0
 instance PPrec Expr where
   ppr i e0 = parIf (prec e0 <= i) $ case e0 of
     Function mf tvs ps mrt e ->
-      ("function" $\ emparens (mf ? (" " <>) <> crocodile tvs) (map pp ps))
+      ("function" $\ emparens (mf ? id <> crocodile tvs) (map pp ps))
       `embrace` pp e
     Lambda [] e -> embrace empty (pp e)
     Lambda ps (Decls ds) -> embrace (parens (csv (map pp ps)) $\ "=>") (vcat (map pp ds))
-    Lambda ps e -> parIf (i > 12) (csv (map pp ps)) <+> "=> " $\ ppr 4 e
-    Let p e -> pp p <+> "= " $\ ppr 4 e
+    Lambda ps e -> parIf (i > 12) (csv (map pp ps)) <+> "=>" $\ ppr 4 e
+    Let p e -> pp p <+> "=" $\ ppr 4 e
     Lit l -> pp l
     Apply (Bin b) [e1,e2] -> ppr (lprec b) e1 <+> pp b <+> ppr (rprec b) e2 -- todo: precedences
     Name n -> pp n
@@ -94,7 +98,7 @@ instance PPrec Expr where
     Apply e es -> emparens (pp e) (map pp es)
     TyApply e ts -> ppr 15 e <> crocodile ts
     Decls ds -> vcat (map pp ds)
-    Sig e t -> ppr 3 e <> ": " $\ pp t
+    Sig e t -> ppr 3 e <> ":" $\ pp t
     Bin b -> pp b
 
 prec :: Expr -> Int
@@ -171,7 +175,7 @@ instance PPrec Type where
     TyCon n ts -> pp n <> crocodile ts
     Arrow ts t es ->
       parIf (i > 0) $
-        parIf singleton (csv (map (ppr prec) ts)) <+> "->" $\
+        parIf (not singleton) (csv (map (ppr prec) ts)) <+> "->" $\
         fsep (intersperse "!" (map (ppr 1) (t:es)))
       where
       singleton = length ts == 1

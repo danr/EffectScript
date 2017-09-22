@@ -1,0 +1,11 @@
+function more(f) {
+  x = "Trick"
+  puts(f("Hello"))
+}
+function main() {
+  x = "World"
+  function c(y) {
+    y + " " + x
+  }
+  more(c)
+}
