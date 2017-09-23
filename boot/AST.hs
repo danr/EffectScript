@@ -41,7 +41,7 @@ data Decl
   = Algebraic TypeHead [Con]
   | Effect TypeHead [Con]
   | Alias TypeHead Type
-  | Expr Expr
+  | Let Pattern Expr
   deriving (Eq, Ord, Show)
 
 data Con
@@ -61,20 +61,24 @@ without (Without a)  = a
 data Expr
   = Function (Maybe Name) [Name] [Pattern `WithOptional` Type] (Maybe Type) Expr
   | Lambda [Pattern] Expr
-  | Let Pattern Expr
   | Lit Lit
   | Bin Bin
   | Name Name
   | Switch [Expr] [Case]
   | Apply Expr [Expr]
   | TyApply Expr [Type]
-  | Decls [Decl]
-  | Sig Expr Type
+  | Seq Decl Expr
+  | Expr `Sig` Type
+  | Expr `Labels` [Name]
   deriving (Eq, Ord, Show)
 
-decls :: [Decl] -> Expr
-decls [Expr e] = e
-decls ds       = Decls ds
+decls :: [Decl] -> Expr -> Expr
+decls ds e = foldr Seq e ds
+
+stmt :: Expr -> Decl
+stmt e@(Function (Just n) _ _ _ _) = Let n e
+stmt e@Let{} = e
+stmt e = Let Wild e
 
 data Pattern
   = ConP Name [Pattern]

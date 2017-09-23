@@ -1,0 +1,32 @@
+
+effect iter<a> {
+  yield(a)
+}
+
+function map(i: r ! iter<a>, f: a -> b ! e): r ! iter<b> ! e {
+  switch next(i) {
+    case yield(a, k): yield(f(a), map(k, f))
+    case done(r): r
+  }
+}
+
+function sum(i: r ! iter<int> ! e): int ! e {
+  switch next(i) {
+    case yield(x, k): x + sum(k)
+    case done(r): r
+  }
+}
+
+function onetwo() {
+  yield(1)
+  yield(2)
+}
+
+function incr(x) {
+  x + 1
+}
+
+function main() {
+  puts(show(sum(map(onetwo, incr))))
+}
+

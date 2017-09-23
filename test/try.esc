@@ -1,0 +1,16 @@
+
+effect exn {
+  throw(msg: string)
+}
+
+function try(m : string ! exn) {
+  switch next(m) {
+    case throw(msg, k) : puts(msg)
+    case done(s) : puts(s)
+  }
+}
+
+function main() {
+  try({throw("boom")})
+  try({"ok"})
+}

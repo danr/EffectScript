@@ -28,7 +28,9 @@ instance Tr BNF.NameK where
 
 instance Tr BNF.Program where
   type To BNF.Program = [AST.Decl]
-  tr (BNF.Program ds) = tr ds
+  tr (BNF.Program ds) =
+    trDecls (ds ++
+      [BNF.Expr (BNF.Call (BNF.NameP ((0,0), "main(")) [])))]
 
 instance Tr BNF.Param where
   type To BNF.Param = AST.Pattern `WithOptional` AST.Type
@@ -36,13 +38,6 @@ instance Tr BNF.Param where
     BNF.Param e           -> Without (trPat e)
     BNF.ParamWithType e t -> trPat e `With` tr t
 
-instance Tr BNF.Decl where
-  type To BNF.Decl = AST.Decl
-  tr d = case d of
-    BNF.Algebraic dh cs -> AST.Algebraic (tr dh) (tr cs)
-    BNF.Effect dh cs    -> AST.Effect (tr dh) (tr cs)
-    BNF.Alias dh t      -> AST.Alias (tr dh) (tr t)
-    BNF.Expr e          -> AST.Expr (tr e)
 
 instance Tr BNF.Con where
   type To BNF.Con = AST.Con
@@ -56,13 +51,26 @@ instance Tr BNF.Rhs where
   type To BNF.Rhs = AST.Expr
   tr r = case r of
     BNF.ExprRhs e  -> tr e
-    BNF.DeclRhs ds -> AST.decls (tr ds)
+    BNF.DeclRhs ds -> trDecls ds
+
+trDecls :: [BNF.Decl] -> Tr AST.Expr
+trDecls [] = error "Declarations not ending in an expression"
+trDecls [d@(BNF.Expr BNF.Let{})] = trDecls [d, BNF.Expr BNF.Unit]
+trDecls [BNF.Expr e] = tr e
+trDecls (d:ds) = d' `AST.Seq` trDecls ds
+  where
+    d' = case d of
+      BNF.Algebraic dh cs      -> AST.Algebraic (tr dh) (tr cs)
+      BNF.Effect dh cs         -> AST.Effect (tr dh) (tr cs)
+      BNF.Alias dh t           -> AST.Alias (tr dh) (tr t)
+      BNF.Expr (BNF.Let e rhs) -> AST.Let (trPat e) (tr rhs)
+      BNF.Expr e               -> tr e
 
 instance Tr BNF.Expr where
   type To BNF.Expr = AST.Expr
   tr e0 = case e0 of
     BNF.Unit                -> AST.Lit AST.Unit
-    BNF.Function fh optt ds -> tr fh (tr optt) (AST.decls (tr ds))
+    BNF.Function fh optt ds -> tr fh (tr optt) (trDecls ds)
     BNF.Lit lit             -> AST.Lit (tr lit)
     BNF.NameMono x          -> AST.Name (tr x)
     BNF.NamePoly x ts       -> AST.Name (tr x) `AST.TyApply` tr ts
@@ -90,9 +98,10 @@ instance Tr BNF.Expr where
     BNF.Ge e1 e2            -> AST.Bin AST.Ge `AST.Apply` [tr e1, tr e2]
 
     BNF.Lambda e rhs        -> AST.Lambda (trPats e) (tr rhs)
-    BNF.Let e rhs           -> AST.Let (trPat e) (tr rhs)
+    BNF.Let e rhs           -> error $ "Let in illegal position" ++ show e0
+                               -- AST.Let (trPat e) (tr rhs)
     BNF.Signature e t       -> AST.Sig (tr e) (tr t)
-    BNF.Lambda0 ds          -> AST.Lambda [] (AST.decls (tr ds))
+    BNF.Lambda0 ds          -> AST.Lambda [] (trDecls ds)
 
     BNF.Comma e1 e2         -> error $ "Comma in illegal position" ++ show e0
 
@@ -133,7 +142,7 @@ instance Tr BNF.Lit where
 
 instance Tr BNF.Case where
   type To BNF.Case = AST.Case
-  tr (BNF.Case e ds) = AST.Case (trPats e) (AST.decls (tr ds))
+  tr (BNF.Case e ds) = AST.Case (trPats e) (trDecls ds)
 
 instance Tr BNF.Type where
   type To BNF.Type = AST.Type

@@ -1,0 +1,19 @@
+
+effect iter<a> {
+  yield(a)
+}
+
+function sum(i: r ! iter<int> ! e): int ! e {
+  switch next(i) {
+    case yield(x, k):
+          sum({k("apa")});
+          "ignored"
+    case done(r): 2
+  }
+}
+
+function main() {
+  sum({yield(1); puts("hej"); "nej"})
+}
+
+

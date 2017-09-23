@@ -1,0 +1,21 @@
+
+type iter<a> {
+  yield(a)
+  done(int)
+}
+
+function sum(i: iter<int> ! ()): int {
+  switch i() {
+    case yield(x):
+        sum({done(1)})
+        puts("never reached")
+        "result"
+    case done(r): 2
+  }
+}
+
+function main() {
+  puts(show(sum({yield(1)})))
+}
+
+

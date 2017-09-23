@@ -44,7 +44,7 @@ class PPrec a where
   ppr :: Int -> a -> Doc
 
 instance PP Name where
-  pp (MkName n _) = text n
+  pp (MkName n _) = text (if take 1 n == "#" then drop 1 n else n)
 
 pretty :: PP a => a -> String
 pretty = render . pp

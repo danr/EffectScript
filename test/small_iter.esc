@@ -1,0 +1,22 @@
+
+effect iter<a> {
+  yield(a)
+}
+
+function sum(i: r ! iter<int> ! e): int ! e {
+  switch next(i) {
+    case yield(x, k):
+        sum({
+          k("apa");
+        })
+          puts("never reached")
+          "result"
+    case done(r): 2
+  }
+}
+
+function main() {
+  puts(show(sum({yield(1); "hej"})))
+}
+
+
