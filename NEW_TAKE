@@ -28,7 +28,7 @@ e ::= let x = e in e
 
 [[ f(x1, .., xn) ]h|k] = f(x1, .., xn, h, k)
 
-[[ do l x ]] = \ h k -> h l(x,h,k)
+[[ do l x ]] = \ h k -> (h ! l) (\ kN -> kN (h - l&co) l(v,k))
 
 [[ x ]|h|k] = x
 
@@ -37,8 +37,8 @@ e ::= let x = e in e
 x : Unit -> H (eff + effs) -> (H (eff + effs) -> 0 -> 0) -> 0
 
 [[ next eff x ]] : H effs -> (H effs -> L(eff) -> 0) -> 0
-= \ h k -> x Unit (h + \ l(v,h2,k2) -> k (h2 - l) (l v (\ x h _ -> k2 h x)))
-                  (\ h x -> h done(x, h, k))
+= \ h k -> x Unit (h + (l, k)) (\ h x -> k (h - done&co) (done(x))
+
 
 
        x : Unit -> 0 ! eff + effs

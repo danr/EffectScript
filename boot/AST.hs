@@ -26,6 +26,15 @@ nextName = wired "next"
 wildName :: Name
 wildName = wired "_"
 
+addHandlers :: Name
+addHandlers = wired "addHandlers"
+
+removeHandlers :: Name
+removeHandlers = wired "removeHandlers"
+
+applyHandler :: Name
+applyHandler = wired "applyHandler"
+
 instance Eq Name where (==) = (==) `on` name_repr
 
 instance Ord Name where compare = compare `on` name_repr
