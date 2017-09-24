@@ -24,7 +24,7 @@ module Label (Type : Set) where
       eff : Effect
       arg : Type
       res : Type
-  
+
 Effects = List Effect
 
 module Vars (Type : Set) where

@@ -38,15 +38,17 @@ cont T effs = handlers effs ⇒ T ⇒ void
 handler : ∀ {effs} l → Label.eff l ∈ effs → Type
 handler l pf = cont (ldata l pf) (rest pf)
 
+infixl 50 _$_
+
 data Expr : Context → Type → Set where
   -- Normal lambda-calculus stuff.
   var : ∀ {Γ T}
     (x : Var Γ T) →
     Expr Γ T
-  lam : ∀ {Γ T U}
+  Λ_ : ∀ {Γ T U}
     (body : Expr (T ∷ Γ) U) →
     Expr Γ (T ⇒ U)
-  app : ∀ {Γ T U}
+  _$_ : ∀ {Γ T U}
     (f : Expr Γ (T ⇒ U)) →
     (x : Expr Γ T) →
     Expr Γ U
@@ -120,6 +122,7 @@ data _⊆_ : Context → Context → Set where
   id : ∀ {Γ} → Γ ⊆ Γ
   keep : ∀ {T Γ Δ} → Γ ⊆ Δ → (T ∷ Γ) ⊆ (T ∷ Δ)
   drop : ∀ {T Γ Δ} → Γ ⊆ Δ → Γ ⊆ (T ∷ Δ)
+  trans : ∀ {Γ Δ Ε} → Γ ⊆ Δ → Δ ⊆ Ε → Γ ⊆ Ε
 
 instance
   idInst : ∀ {Γ} → Γ ⊆ Γ
@@ -134,11 +137,12 @@ inj-var {{id}} x = x
 inj-var {{keep _}} zero = zero
 inj-var {{keep rel}} (succ x) = succ (inj-var {{rel}} x)
 inj-var {{drop rel}} x = succ (inj-var {{rel}} x)
+inj-var {{trans rel1 rel2}} x = inj-var {{rel2}} (inj-var {{rel1}} x)
 
 inj : ∀ {T Γ Δ} → {{_ : Γ ⊆ Δ}} → Expr Γ T → Expr Δ T
 inj (var x) = var (inj-var x)
-inj (lam x) = lam (inj x)
-inj (app e1 e2) = app (inj e1) (inj e2)
+inj (Λ x) = Λ (inj x)
+inj (e1 $ e2) = inj e1 $ inj e2
 inj (lett e1 e2) = lett (inj e1) (inj e2)
 inj unit = unit
 inj (make-ldata l pf x k) = make-ldata l pf (inj x) (inj k)
@@ -185,13 +189,14 @@ v3 = inj {{drop id}} v2
 -- Translating values and expressions.
 mutual
   ⟦_⟧V : ∀ {Γ Δ T} →
-    {{ _ : ⟦ Γ ⟧γ ⊆ Δ }} →
+    {{_ : ⟦ Γ ⟧γ ⊆ Δ}} →
     E.Value Γ T →
     Expr Δ ⟦ T ⟧τ
   ⟦ E.var x ⟧V =
     inj (var ⟦ x ⟧v)
   ⟦ E.lam body ⟧V =
-    lam (lam (lam (⟦ body ⟧ v1 v0)))
+    -- \x h k -> body h k (where h may be bound in body)
+    Λ Λ Λ ⟦ body ⟧ v1 v0
   
   ⟦_⟧ : ∀ {Γ Δ T effs} →
     {{ _ : ⟦ Γ ⟧γ ⊆ Δ }} →
@@ -200,21 +205,20 @@ mutual
     Expr Δ (cont ⟦ T ⟧τ effs) →
     Expr Δ void
   ⟦ E.val x ⟧ h k =
-    -- k h x
-    app (app k h) ⟦ x ⟧V
+    k $ h $ ⟦ x ⟧V
   ⟦ E.app f x ⟧ h k =
-    -- f x k h
-    app (app (app ⟦ f ⟧V ⟦ x ⟧V) h) k
+    ⟦ f ⟧V $ ⟦ x ⟧V $ h $ k
   ⟦ E.lett e1 e2 ⟧ h k =
     -- e1 h (\h' x -> e2 h' k) (where x may be bound in e2)
-    ⟦ e1 ⟧ h (lam (lam (⟦ e2 ⟧ v1 (inj k))))
+    ⟦ e1 ⟧ h (Λ Λ ⟦ e2 ⟧ v1 (inj k))
   ⟦ E.do {l = l} pf x ⟧ h k =
     -- get-handler h l
     --   (remove-handler eff h)
     --   l(x, \y h' _ -> k h' y)
-    app (app (get-handler ⟦ l ⟧ℓ pf h) (remove-handler pf h))
-      (make-ldata ⟦ l ⟧ℓ pf ⟦ x ⟧V
-        (lam (lam (lam (app (app (inj k) v1) v2)))))
+    get-handler ⟦ l ⟧ℓ pf h $
+      remove-handler pf h $
+      make-ldata ⟦ l ⟧ℓ pf ⟦ x ⟧V
+        (Λ Λ Λ inj k $ v1 $ v2)
   ⟦ E.case {l = l} pf x e1 e2 ⟧ h k =
     -- case x of
     --   effdata(l(y, k1)) -> e1[y, k1]
@@ -229,17 +233,17 @@ mutual
     --     [ \h ldata -> k h effdata(ldata)
     --     | l <- labels eff ]
     --     (error "returned from next")
-    app (app (app ⟦ x ⟧V unit)
-      (add-handler pf
-        (λ l eq → makeHandler pf l eq k) h))
+    ⟦ x ⟧V $ unit $
+      add-handler pf
+        (λ l eq → makeHandler pf l eq k) h $
       -- v0 here has type void, i.e., this calls error
-      (lam (lam v0))
+      (Λ Λ v0)
 
   makeHandler  :
     ∀ {Γ eff effs} (pf : eff ∈ effs) l (eq : eff ≡ Label.eff l) →
     (k : Expr Γ (cont (effdata pf) (rest pf))) →
     Expr Γ (handler l (subst (λ eff → eff ∈ effs) eq pf))
   makeHandler pf l refl k =
-    lam (lam (app (app (inj k) v1) (make-effdata l pf v0)))
+    Λ Λ inj k $ v1 $ make-effdata l pf v0
       
     
