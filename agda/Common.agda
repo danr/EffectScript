@@ -2,6 +2,7 @@ module Common where
 
 open import Data.Nat
 open import Data.List hiding (all)
+open import Relation.Binary.PropositionalEquality
 
 data _∈_ {A : Set} : A → List A → Set where
   here : ∀ {x xs} → x ∈ (x ∷ xs)
@@ -10,6 +11,10 @@ data _∈_ {A : Set} : A → List A → Set where
 rest : ∀ {A : Set} {x : A} {xs : List A} → x ∈ xs → List A
 rest {xs = _ ∷ xs} here = xs
 rest {xs = x ∷ _} (there pf) = x ∷ rest pf
+
+rest-nil : ∀ {A : Set} {x y : A} {xs : List A} (pf : x ∈ (y ∷ xs)) → rest pf ≡ [] → xs ≡ []
+rest-nil here eqn = eqn
+rest-nil (there pf) ()
 
 postulate
   LabelNumber : Set
