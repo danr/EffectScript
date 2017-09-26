@@ -6,6 +6,9 @@ import Text.PrettyPrint
 import Data.List (intersperse)
 import Text.Show.Pretty (ppDoc)
 
+instance PP a => PP [a] where
+  pp = csv . map pp
+
 data Showable a = Show a
 
 instance Show a => PP (Showable a) where
@@ -59,7 +62,8 @@ instance PP Decl where
     Algebraic th cs -> embrace ("type" <+> pp th) (vcat (map pp cs))
     Effect th cs -> embrace ("effect" <+> pp th) (vcat (map pp cs))
     Alias th t -> "alias" <+> pp th <+> "=" $\ pp t
-    Expr e -> pp e
+    Let Wild e -> pp e
+    Let p e -> pp p <+> "=" $\ pp e
 
 instance PP Con where
   pp (Con x ts as mrt) =
@@ -88,40 +92,41 @@ instance PPrec Expr where
       ("function" $\ emparens (mf ? id <> crocodile tvs) (map pp ps))
       `embrace` pp e
     Lambda [] e -> embrace empty (pp e)
-    Lambda ps (Decls ds) -> embrace (parens (csv (map pp ps)) $\ "=>") (vcat (map pp ds))
-    Lambda ps e -> parIf (i > 12) (csv (map pp ps)) <+> "=>" $\ ppr 4 e
-    Let p e -> pp p <+> "=" $\ ppr 4 e
+    Lambda ps ds@Seq{} -> embrace (parens (csv (map pp ps)) $\ "=>") (pp ds)
+    Lambda ps e -> parIf (i > 12 || length ps > 1) (csv (map pp ps)) <+> "=>" $\ ppr 4 e
     Lit l -> pp l
     Apply (Bin b) [e1,e2] -> ppr (lprec b) e1 <+> pp b <+> ppr (rprec b) e2 -- todo: precedences
     Name n -> pp n
+    Quote n -> "'" <> pp n
     Switch es cs -> ("switch" $\ csv (map pp es)) `embrace` (vcat (map pp cs))
-    Apply e es -> emparens (pp e) (map pp es)
+    Apply e es -> emparens (ppr 5 e) (map pp es)
     TyApply e ts -> ppr 15 e <> crocodile ts
-    Decls ds -> vcat (map pp ds)
+    Seq d e -> pp d $$ pp e
     Sig e t -> ppr 3 e <> ":" $\ pp t
     Bin b -> pp b
+    e `Labels` ls -> ppr 3 e <> "[" $\ fsep (map pp ls) <> "]"
 
 prec :: Expr -> Int
 prec e = case e of
-  Decls{}    -> 15
-  Sig{}      -> 2
-  Lambda{}   -> 4
-  Let{}      -> 4
+  Seq{}       -> 15
+  Sig{}       -> 2
+  Labels{}    -> 2
+  Lambda{}    -> 4
   Apply (Bin b) [_,_] -> let (p, _, _) = binPrec b in p
-  Apply{}    -> 14
-  Function{} -> 14
-  Switch{}   -> 14
-  TyApply{}  -> 14
-  Lit{}      -> 15
-  Name{}     -> 15
-  Bin{}      -> 15
+  Apply{}     -> 14
+  Function{}  -> 14
+  Switch{}    -> 14
+  TyApply{}   -> 14
+  Lit{}       -> 15
+  Name{}      -> 15
+  Quote{}     -> 15
+  Bin{}       -> 15
 
 instance PP Pattern where
   pp p = case p of
     ConP n ps -> emparens (pp n) (map pp ps)
     NameP n -> pp n
     Wild -> "_"
-    AssignP n p -> parens (pp n <+> "=" $\ pp p)
     LitP l -> pp l
     GuardP p e -> error "todo: pretty print guard syntax"
 
@@ -131,7 +136,7 @@ instance PP Case where
 instance PP Lit where
   pp l = case l of
     Integer i -> integer i
-    String s -> text (show s)
+    String s -> text s -- (show s)
     Unit -> "()"
 
 instance PP Bin where

@@ -1,11 +1,11 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving, FlexibleContexts #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE ViewPatterns #-}
+{-# LANGUAGE NamedFieldPuns #-}
 module Interpret where
 
 import Control.Monad
--- import Control.Monad.Reader
--- import Control.Monad.State
--- import Control.Monad.Cont
+import Control.Monad.Reader
 import Data.Maybe
 import Data.List
 import Text.Show.Functions
@@ -18,56 +18,19 @@ import Text.PrettyPrint
 import Data.Map (Map)
 import qualified Data.Map as M
 
-newtype I a = I { unI :: Env -> St -> (St -> a -> IO Value) -> IO Value }
-
-
-withCont :: ((Value -> I Value) -> I Value) -> I Value
-withCont = _
-
-instance Functor I where fmap = liftM
-instance Applicative I where pure = return; (<*>) = ap
-
-local :: (Env -> Env) -> I a -> I a
-local k (I m) = I $ \ env -> m (k env)
-
-ask :: I Env
-ask = I $ \ env st k -> k st env
-
-asks :: (Env -> a) -> I a
-asks f = fmap f ask
-
-get :: I St
-get = I $ \ env st k -> k st st
-
-gets :: (St -> a) -> I a
-gets f = fmap f get
-
-modify :: (St -> St) -> I ()
-modify p = I $ \ env st k -> k (p st) ()
-
-put :: St -> I ()
-put = modify . const
+newtype I a = I { unI :: ReaderT Env IO a }
+  deriving (MonadReader Env, Monad, Functor, Applicative)
 
 io :: IO a -> I a
-io m = I $ \ env st k -> m >>= k st
-
-callCC :: ((a -> I b) -> I a) -> I a
-callCC cc = I $ \ env st k -> let I m = cc (\ a -> I $ \ env st _ -> k st a) in m env st k
-
-
---   deriving (MonadIO, MonadCont, MonadReader Env, MonadState St, Monad, Functor, Applicative)
-
-type Handlers = [([Name], Value -> I Value)]
+io = I . liftIO
 
 data Env = Env
   { scope :: Bindings
   }
   deriving Show
 
-data St = St
-  { handlers :: Handlers
-  }
-  deriving Show
+instance PP Env where
+  pp = ppBindings . scope
 
 ppBindings :: Bindings -> Doc
 ppBindings bs = fsep $ punctuate comma
@@ -78,25 +41,19 @@ noFun :: Bindings -> Bindings
 noFun = M.filter (not . isFun)
   where
   isFun FunV{} = True
-  isFun EffectV{} = True
   isFun _ = False
-
-data EnvSt = EnvSt Env St
-
-instance PP EnvSt where
-  pp (EnvSt Env{..} St{..}) = braces $ sep $ punctuate comma
-    [ "scope:" $\ braces (ppBindings (noFun scope))
-    , "handlers:" $\ brackets (csv [brackets (csv (map pp ns)) | (ns, _k) <- handlers ])
-    ]
 
 wiredBindings :: Bindings
 wiredBindings =
   M.fromList
-    [ (partialName, EffectV partialName)
-    , (trueName, boolV True)
+    [ (trueName, boolV True)
     , (falseName, boolV False)
     , (wired "puts", putsBuiltin)
     , (wired "show", showBuiltin)
+    , (addHandler, BuiltinV addH)
+    , (removeHandler, BuiltinV removeH)
+    , (getHandler, BuiltinV getH)
+    , (topHandler, Handlers [])
     ]
 
 extendScope :: Bindings -> I a -> I a
@@ -113,17 +70,14 @@ initEnv = Env
   { scope = wiredBindings
   }
 
-initSt :: St
-initSt = St
-  { handlers = [([partialName], \ _ -> typeError "unhandled partial")]
-  }
-
 runI :: I Value -> IO Value
-runI (I m) = m initEnv initSt (\ st a -> return a)
+runI (I m) = runReaderT m initEnv
 
+{-
 -- need to do this using iExpr to handle top-level lets
 top :: [Decl] -> I Value
 top ds = iExpr (Decls (ds ++ [Expr (Apply (Name (wired "main")) [])]))
+-}
 
 runtimeError :: String -> I Value
 runtimeError = throwError . ("Runtime error: " ++)
@@ -139,26 +93,26 @@ throwError = error -- s = callCC $ \ _ -> return (ErrV s)
 
 data Value
   = ConV Name [Value]
+  | QuoteV Name -- a quoted name: label of an effect operation
   | FunV [Pattern] Closure Expr -- its rec group is part of the closure
-  | NextV [Name] -- ops this next handles
-  | EffectV Name -- the op this effect yields when applied to its arguments
-  | ContV (Value -> I Value) -- continuation from next
   | BuiltinV ([Value] -> I Value) -- could be relaxed to return IO Value
   | LitV Lit
   | ErrV String
+  | Handlers [([Name], Value)]
   deriving Show
 
 instance PP Value where
-  pp (ConV k vs) = emparens (pp k) (map pp vs)
+  pp (ConV k vs) = "ConV" $\ emparens (pp k) (map pp vs)
+  pp (QuoteV k) = "QuoteV" $\ pp k
   pp (FunV ps (Closure closure) e) =
+    "FunV" $\
     pp (Function Nothing [] (map Without ps) Nothing e) $\
       brackets (ppBindings (noFun closure))
-  pp (NextV ops) = emparens "NextV" (map pp ops)
-  pp (EffectV op) = emparens "EffectV" [pp op]
-  pp (ContV _) = "ContV"
   pp (BuiltinV _) = "BuiltinV"
-  pp (LitV l) = pp l
+  pp (LitV l) = "LitV" $\ pp l
   pp (ErrV s) = emparens "ErrV" [text s]
+  pp (Handlers xs) = "Handlers" $\ brackets
+    (fsep (punctuate comma [ fsep (map pp x) <> ":" $\ pp y | (x,y) <- xs]))
 
 -- Bindings, Scope, Closure etc
 type Bindings = Map Name Value
@@ -236,7 +190,7 @@ match (ConP c ps) (ConV c2 vs)
   | otherwise = Nothing
 match Wild _ = Just M.empty
 match (NameP n) v = Just (M.singleton n v)
-match (AssignP n p) v = M.insert n v <$> match p v
+-- match (AssignP n p) v = M.insert n v <$> match p v
 match (LitP lp) (LitV l)
   | lp == l = Just M.empty
   | otherwise = Nothing
@@ -248,47 +202,35 @@ matches (p:ps) (v:vs) = M.union <$> match p v <*> matches ps vs
 matches []     []     = Just M.empty
 matches _      _      = Nothing
 
-partialEffect :: I Value
-partialEffect = iExpr (Apply (Name partialName) [])
+partialEffect :: String -> I Value
+partialEffect s = iExpr (Apply (Name partialName) [Lit (String s)])
 
 trace :: (PP a, PP b) => a -> I b -> I b
 trace e m =
   do env <- ask
-     st <- get
-     io $ putStrLn (render ("evaluating:" $\ pp e $$ "in context:" $\ pp (EnvSt env st))) --  -| EnvSt env st))
+     -- io $ putStrLn (render ("evaluating:" $\ pp e $$ "in context:" $\ pp env)) --  -| EnvSt env st))
      r <- m
-     io $ putStrLn (pretty (r <-- e))
+     -- io $ putStrLn (pretty (r <-- e))
      return r
 
 iExpr :: Expr -> I Value
-iExpr = iExprWithInfo Nothing
-
-data WithInfo = Expr `WithInfo` Maybe [Name]
-
-instance PP WithInfo where
- pp (e `WithInfo` Nothing) = pp e
- pp (e `WithInfo` Just ns) = pp e $\ brackets (brackets (csv (map pp ns)))
-
-iExprWithInfo :: Maybe [Name] -> Expr -> I Value
-iExprWithInfo minfo e0 =
+iExpr e0 =
   let interesting = case e0 of
                       Lit{} -> False
                       Bin{} -> False
                       Name{} -> False
+                      Quote{} -> False
                       Function{} -> False
                       Lambda{} -> False
                       _ -> True
-  in (if interesting then trace (e0 `WithInfo` minfo) else id) $
+  in (if interesting then trace e0 else id) $
   -- add debug output of what the scope and the context is
   case e0 of
-    Function{} -> iExpr (Decls [Expr e0])
+    f@Function{} -> funV f <$> asks scope
 
     Lambda ps e ->
       do closure <- asks scope
          return (FunV ps (Closure closure) e)
-
-    Let{} ->
-      todo "Let not at top level: won't scope over anything (nested let not supported by interpreter)"
 
     Lit l ->
       do return (LitV l)
@@ -296,71 +238,37 @@ iExprWithInfo minfo e0 =
     Bin b ->
       do return (binOp b)
 
-    Name n | n == nextName ->
-      case minfo of
-        Just info -> return (NextV info)
-        Nothing   -> runtimeError "next must be head of a scrutinee in the untyped interpreter"
     Name n ->
       do mv <- asks (M.lookup n . scope)
          case mv of
            Just v  -> return v
            Nothing -> runtimeError $ "unbound name: " ++ name_repr n
 
+    Quote n ->
+      do return (QuoteV n)
+
     Switch es cases ->
-      do vs <- sequence [ iExprWithInfo (Just [c | ConP c _ <- pats]) e
-                        | e <- es
-                        | pats <- transpose [ps | Case ps _ <- cases] ]
+      do vs <- mapM iExpr es
          let go (Case ps rhs:cases') =
                do mbs <- return $ matches ps vs
                   case mbs of
                     Just bs -> extendScope bs (iExpr rhs)
                     Nothing -> go cases'
-             go [] = partialEffect
+             go [] = partialEffect "switch"
          propagateErrors vs $ go cases
 
     Apply f es ->
-      do vf <- iExprWithInfo minfo f
+      do vf <- iExpr f
          vs <- mapM iExpr es
          propagateErrors (vf:vs) $ case vf of
            ConV k [] -> return (ConV k vs)
            ConV k _  -> typeError "constructor already applied to arguments"
 
-           ContV k -> do
-             case vs of
-               [v] -> k v >>= \ r -> io (putStrLn "ContV done") >> return r
-               []  -> k (LitV Unit) >>= \ r -> io (putStrLn "ContV done") >> return r
-               _   -> typeError "too many resume arguments"
-
-           EffectV op ->
-             do hs <- gets handlers
-                case break ((op `elem`) . fst) hs of
-                  (pre, (_ops, h):post) ->
-                    callCC $ \ k ->
-                      do io (putStrLn "CallCC from EffectV")
-                         let k' v = modify (\ st -> st{ handlers = pre ++ post }) >> k v
-                         h (ConV op (vs ++ [ContV k']))
-                  _ -> typeError ("Unhandled handler: " ++ pretty op ++ " (from " ++ ppShow hs ++ ")")
-
-           NextV ops ->
-             let next m =
-                   withCont $ \ n ->
-                     do io (putStrLn "CallCC from NextV")
-                        st0 <- get
-                        modify $ \st -> st{
-                          handlers = (ops, \ _ -> put st >> n):handlers st
-                        }
-                        ConV doneName . (:[]) <$> m
-             in case vs of
-               [FunV [] (Closure closure) rhs] -> inScope closure (next (iExpr rhs))
-               [ContV k] -> next (k (LitV Unit))
-               _ -> typeError $ "next must be applied to one single nullary function, is applied to " ++ ppShow vs
-
-
            FunV ps (Closure closure) rhs ->
              do mbs <- return $ matches ps vs
                 case mbs of
                   Just bs -> inScope closure $ extendScope bs (iExpr rhs)
-                  Nothing -> partialEffect
+                  Nothing -> partialEffect $ "function argument: " ++ pretty ps ++ pretty vs
 
            ErrV x -> return (ErrV x)
 
@@ -371,30 +279,17 @@ iExprWithInfo minfo e0 =
     TyApply e ts ->
       do iExpr e
 
-    Decls ds@(d:_) | declarative d ->
-      do let (decls,expr_decls) = span declarative ds
-         closure <- asks scope
-         bs <- return $ declsScope decls closure
-         extendScope bs $ iExpr (Decls (expr_decls `orList` [last ds]))
+    ds@(Seq d _) | declarative d ->
+      do let (decls, e) = spanDecls declarative ds
+         bs <- declsScope decls <$> asks scope
+         extendScope bs $ iExpr e
 
-    Decls (Expr (Let p e):ds) ->
+    Seq (Let p e) ds ->
       do v <- iExpr e
          mb <- return $ match p v
          propagateError v $ case mb of
-           Just bs -> extendScope bs $ iExpr (Decls (ds `orList` [Expr e]))
-           Nothing -> partialEffect
-
-    Decls [Expr e] -> iExpr e
-
-    Decls (Expr e:ds) ->
-      do v <- iExpr e
-         propagateError v $ iExpr (Decls ds)
-        -- this expr is just done for side effects (cannot extend scope over ds)
-
-    Decls [] -> return (LitV Unit)
-        -- this can be the rhs of an empty block or lambda (e => {})
-        -- not an empty record though :)
-
+           Just bs -> extendScope bs $ iExpr ds
+           Nothing -> partialEffect "let"
 
 propagateErrors :: [Value] -> I Value -> I Value
 propagateErrors (v:vs) m = propagateError v (propagateErrors vs m)
@@ -409,17 +304,41 @@ orList [] ys = ys
 orList xs _  = xs
 
 declarative :: Decl -> Bool
-declarative (Expr Function{}) = True
-declarative (Expr _) = False
-declarative _        = True
+declarative (Let _ Function{}) = True
+declarative Let{} = False
+declarative _     = True
+
+funV :: Expr -> Bindings -> Value
+funV Function{fn_name, fn_params, fn_body} closure = f
+  where
+  add_self = maybe id (`M.insert` f) fn_name
+  f = FunV (map without fn_params)
+           (Closure (add_self closure)) fn_body
 
 -- These are all 'declarative'
 declsScope :: [Decl] -> Bindings -> Bindings
 declsScope ds closure = us
   where
   us = M.fromList $
-        [ (n, FunV (map without ps) (Closure (us `M.union` closure)) rhs)
-        | Expr (Function (Just n) _tvs ps _ rhs) <- ds ] ++
-        [ (n, ConV n []) | Algebraic _ cons <- ds, Con{con_name=n} <- cons ] ++
-        [ (n, EffectV n) | Effect _ cons <- ds, Con{con_name=n} <- cons ]
+        [ (n, funV f (us `M.union` closure))
+        | Let (NameP n) f@Function{} <- ds ] ++
+        [ (n, ConV n []) | Algebraic _ cons <- ds, Con{con_name=n} <- cons ]
+
+removeH :: [Value] -> I Value
+removeH [Handlers xs, QuoteV op] =
+  return $ Handlers [ x | x@(ops, _) <- xs, op `notElem` ops ]
+
+addH :: [Value] -> I Value
+addH (Handlers xs:k:qops) =
+  return $ Handlers ((map (\ (QuoteV op) -> op) qops, k):xs)
+addH xs =
+  do io $ putStrLn "addH args:"
+     mapM_ (io . putStrLn . pretty) xs
+     error "addH wrongly applied"
+
+getH :: [Value] -> I Value
+getH [Handlers xs, QuoteV op] =
+  case [ k | (ops, k) <- xs, op `elem` ops ] of
+    k:_ -> return k
+    [] -> error $ "Unregistered handler for " ++ pretty op
 

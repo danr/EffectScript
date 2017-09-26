@@ -27,10 +27,10 @@ instance Tr BNF.NameK where
   tr (BNF.NameK (p,s)) = AST.MkName (init s) p
 
 instance Tr BNF.Program where
-  type To BNF.Program = [AST.Decl]
+  type To BNF.Program = AST.Expr
   tr (BNF.Program ds) =
     trDecls (ds ++
-      [BNF.Expr (BNF.Call (BNF.NameP ((0,0), "main(")) [])))]
+      [BNF.Expr (BNF.Call (BNF.NameP ((0,0), "main(")) [])])
 
 instance Tr BNF.Param where
   type To BNF.Param = AST.Pattern `WithOptional` AST.Type
@@ -53,7 +53,7 @@ instance Tr BNF.Rhs where
     BNF.ExprRhs e  -> tr e
     BNF.DeclRhs ds -> trDecls ds
 
-trDecls :: [BNF.Decl] -> Tr AST.Expr
+trDecls :: [BNF.Decl] -> AST.Expr
 trDecls [] = error "Declarations not ending in an expression"
 trDecls [d@(BNF.Expr BNF.Let{})] = trDecls [d, BNF.Expr BNF.Unit]
 trDecls [BNF.Expr e] = tr e
@@ -64,7 +64,10 @@ trDecls (d:ds) = d' `AST.Seq` trDecls ds
       BNF.Effect dh cs         -> AST.Effect (tr dh) (tr cs)
       BNF.Alias dh t           -> AST.Alias (tr dh) (tr t)
       BNF.Expr (BNF.Let e rhs) -> AST.Let (trPat e) (tr rhs)
-      BNF.Expr e               -> tr e
+      BNF.Expr e ->
+        case tr e of
+          fn@AST.Function{AST.fn_name=Just n} -> AST.Let (AST.NameP n) fn
+          tr_e -> AST.Let AST.Wild tr_e
 
 instance Tr BNF.Expr where
   type To BNF.Expr = AST.Expr
@@ -131,7 +134,6 @@ pat e = case e of
     | x == AST.wildName     -> AST.Wild
     | otherwise             -> AST.NameP x
   AST.Apply (AST.Name k) es -> AST.ConP k (map pat es)
-  AST.Let (AST.NameP x) e   -> AST.AssignP x (pat e)
   e -> error $ "Not a pattern: " ++ show e
 
 instance Tr BNF.Lit where

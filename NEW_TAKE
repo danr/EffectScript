@@ -30,6 +30,10 @@ e ::= let x = e in e
 
 [[ do l x ]] = \ h k -> (h ! l) (\ kN -> kN (h - l&co) l(v,k))
 
+[[ do l x ]] = \ h k ->
+                 get-handler(h,l)(remove-handler(h,l),
+                                  l(x, \ y h' _ -> k h' y)))
+
 [[ x ]|h|k] = x
 
 [[ \ x1 .. xn . e ]] = \ (x1,...,xn,h,k) -> [[ e ]h|k]

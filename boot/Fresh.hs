@@ -1,3 +1,4 @@
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 module Fresh where
 
 import Control.Monad.State
@@ -11,8 +12,10 @@ class MonadFresh m where
   fresh :: String -> m Name
 
 instance MonadFresh Fresh where
-  fresh h = M $
+  fresh h = Fresh $
     do i <- get
        modify succ
        return (wired ("#" ++ h ++ show i))
 
+runFresh :: Fresh a -> a
+runFresh (Fresh m) = evalState m 0

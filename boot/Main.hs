@@ -17,6 +17,9 @@ import AST
 import Pretty
 import Interpret
 import TrAST
+import Fresh
+import ANF
+import EffectConvert
 
 import ErrM
 
@@ -40,11 +43,29 @@ run s =
          putStrLn (ppShow ast)
          continue ast
 
-continue :: [AST.Decl] -> IO ()
-continue decls =
-  do putStrLn (pretty (AST.Decls decls))
-     v <- runI (top decls)
-     putStrLn (ppShow v)
+continue :: AST.Expr -> IO ()
+continue e =
+  do putStrLn (pretty e)
+     let (e_anf, e_ec) =
+           runFresh $
+             do e_anf <- anf e
+                x <- fresh "x"
+                h' <- fresh "h"
+                h'' <- fresh "h"
+                f <- fresh "f"
+                e_ec <- runEC $ ec e_anf
+                    (AST.Name topHandler)
+                    (AST.Lambda
+                        [AST.NameP h', AST.NameP f]
+                        (AST.Apply (AST.Name f) [AST.Name h',
+                            AST.Lambda [AST.NameP h'', AST.NameP x] (AST.Name x)]))
+                return (e_anf, e_ec)
+     putStrLn "\n=== Administrative Normal Form ===\n"
+     putStrLn (pretty e_anf)
+     putStrLn "\n=== Effect Converted ===\n"
+     putStrLn (pretty e_ec)
+     v <- runI (iExpr e_ec)
+     putStrLn (pretty v)
      exitSuccess
 
 showTree :: Program -> IO ()

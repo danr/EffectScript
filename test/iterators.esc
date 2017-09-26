@@ -5,14 +5,14 @@ effect iter<a> {
 
 function map(i: r ! iter<a>, f: a -> b ! e): r ! iter<b> ! e {
   switch next(i) {
-    case yield(a, k): yield(f(a), map(k, f))
+    case yield(a, k): yield(f(a), map(k(9876), f))
     case done(r): r
   }
 }
 
 function sum(i: r ! iter<int> ! e): int ! e {
   switch next(i) {
-    case yield(x, k): x + sum(k)
+    case yield(x, k): x + sum({k(8765)})
     case done(r): r
   }
 }

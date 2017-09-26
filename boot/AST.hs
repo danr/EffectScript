@@ -26,14 +26,14 @@ nextName = wired "next"
 wildName :: Name
 wildName = wired "_"
 
-addHandlers :: Name
-addHandlers = wired "addHandlers"
+addHandler :: Name
+addHandler = wired "addHandler"
 
-removeHandlers :: Name
-removeHandlers = wired "removeHandlers"
+removeHandler :: Name
+removeHandler = wired "removeHandler"
 
-applyHandler :: Name
-applyHandler = wired "applyHandler"
+getHandler :: Name
+getHandler = wired "getHandler"
 
 instance Eq Name where (==) = (==) `on` name_repr
 
@@ -68,11 +68,18 @@ without (a `With` b) = a
 without (Without a)  = a
 
 data Expr
-  = Function (Maybe Name) [Name] [Pattern `WithOptional` Type] (Maybe Type) Expr
+  = Function {
+      fn_name   :: Maybe Name,
+      fn_tvs    :: [Name],
+      fn_params :: [Pattern `WithOptional` Type],
+      fn_res_ty :: (Maybe Type),
+      fn_body   :: Expr
+    }
   | Lambda [Pattern] Expr
   | Lit Lit
   | Bin Bin
   | Name Name
+  | Quote Name
   | Switch [Expr] [Case]
   | Apply Expr [Expr]
   | TyApply Expr [Type]
@@ -84,16 +91,18 @@ data Expr
 decls :: [Decl] -> Expr -> Expr
 decls ds e = foldr Seq e ds
 
-stmt :: Expr -> Decl
-stmt e@(Function (Just n) _ _ _ _) = Let n e
-stmt e@Let{} = e
-stmt e = Let Wild e
+declsOf :: Expr -> [Decl]
+declsOf (Seq d ds) = d:declsOf ds
+declsOf _          = []
+
+spanDecls :: (Decl -> Bool) -> Expr -> ([Decl], Expr)
+spanDecls p (Seq d rhs) | p d = let (ds, e) = spanDecls p rhs in (d:ds, e)
+spanDecls _ e = ([], e)
 
 data Pattern
   = ConP Name [Pattern]
   | NameP Name
   | Wild
-  | AssignP Name Pattern
   | LitP Lit
   | GuardP Pattern Expr
   deriving (Eq, Ord, Show)
@@ -116,3 +125,5 @@ data Type
 unitTyConName :: Name
 unitTyConName = wired "Unit"
 
+topHandler :: Name
+topHandler = wired "h_top"
