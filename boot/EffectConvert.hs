@@ -71,11 +71,13 @@ ec e0 h k =
          h <- fresh "h"
          x <- fresh "x"
          k <- fresh "k"
-         return $ Let (NameP k) k0' `Seq`
+         return $
            (vp `Apply`
-             [ addHandler $$ (h0:Name k:[ Quote label | label <- labels, label /= doneName ])
-             , lam [h, x]
-                 (k $$ [Name h, DataCon doneName `Apply` [Name x]])
+             [ addHandler $$
+                (h0:
+                 k0':
+                 [ Quote label | label <- labels, label /= doneName ])
+             , lam [h, x] (Lit (String "Void") `Apply` [Name x])
              ])
 
     Apply (Op op) xs ->
@@ -87,10 +89,7 @@ ec e0 h k =
              h,
              DataCon op `Apply`
                 (xs ++ [Lambda [NameP y, NameP h', NameP k']
-                        -- (k `Apply` [Name h', (k' $$ [Name h', Name y])])])
-                        -- (k' $$ [Name h', (k `Apply` [Name h', Name y])])])
                         (k `Apply` [Name h', Name y])])
-                        -- (k' $$ [Name h', Name y])])
            ]
     Apply f xs ->
       do vs <- mapM ecVal xs

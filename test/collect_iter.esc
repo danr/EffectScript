@@ -1,0 +1,48 @@
+
+effect iter<a> {
+  yield(a)
+  doneeff(string)
+  flip(): bool
+}
+
+type list<a> {
+  Cons(x, xs)
+  Nil
+}
+
+type Bool {
+  False
+  True
+}
+
+function append<a>(xs: list<a>, ys: list<a>): list<a> {
+  switch xs {
+    case Cons(u,us): Cons(u,append(us,ys))
+    case Nil: ys
+  }
+}
+
+function collect<a, e, r>(i: r ! iter<a> ! e): list<a> ! e {
+  switch next({x = i(); doneeff(x)}) {
+    case yield(x, k): Cons(x, collect({k("unit")}))
+    case flip(k): append(collect({k(False)}),
+                         collect({k(True)}))
+    case doneeff(u, _): Nil()
+    // may not be called
+    case done(_): Nil()
+  }
+}
+
+function main() {
+  collect({
+    yield(1)
+    switch flip() {
+      case False: yield(4)
+      case True: yield(2); yield(3)
+    }
+    yield(5)
+  })
+}
+
+
+

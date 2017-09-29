@@ -177,6 +177,7 @@ betaReduce =
             _ -> False
         _ -> e0
 
+  where
 substList :: Map Name Expr -> Expr -> Expr
 substList su =
   transformBi $
