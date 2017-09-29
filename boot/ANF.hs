@@ -13,7 +13,10 @@ isValue e0 =
     Name{} -> True
     Lit{} -> True
     Bin{} -> True
+    Op{} -> True
+    DataCon{} -> True
     Apply Bin{} vs -> all isValue vs
+    Apply DataCon{} vs -> all isValue vs
     Apply (Name f) vs -> f `elem` [wired "puts", wired "show"] && all isValue vs
     _ -> False
 
@@ -25,6 +28,8 @@ anf e0 =
     Lit l  -> return (Lit l)
     Bin b  -> return (Bin b)
     Name n -> return (Name n)
+    DataCon n -> return (DataCon n)
+    Op n -> return (Op n)
     Switch es cases ->
       do (ds,xs) <-
            unzip <$>

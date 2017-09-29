@@ -36,12 +36,14 @@ run s =
          putStrLn s
          exitFailure
     Ok tree ->
-      do putStrLn "\nParse Successful!"
-         showTree tree
-         putStrLn (ppShow tree)
+      do --putStrLn "\nParse Successful!"
+         --showTree tree
+         --putStrLn (ppShow tree)
          let ast = tr tree
-         putStrLn (ppShow ast)
-         continue ast
+         -- putStrLn (ppShow ast)
+         let ast2 = intuitTypes ast
+         -- putStrLn (ppShow ast2)
+         continue ast2
 
 continue :: AST.Expr -> IO ()
 continue e =
@@ -64,7 +66,10 @@ continue e =
      putStrLn (pretty e_anf)
      putStrLn "\n=== Effect Converted ===\n"
      putStrLn (pretty e_ec)
-     v <- runI (iExpr e_ec)
+     putStrLn "\n=== Beta Reduced ===\n"
+     let e_br = betaReduce e_ec
+     putStrLn (pretty e_br)
+     v <- runI (iExpr e_br)
      putStrLn (pretty v)
      exitSuccess
 

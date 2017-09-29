@@ -1,7 +1,8 @@
-{-# LANGUAGE GeneralizedNewtypeDeriving, FlexibleContexts #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ViewPatterns #-}
 {-# LANGUAGE NamedFieldPuns #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE FlexibleContexts #-}
 module Interpret where
 
 import Control.Monad
@@ -17,6 +18,7 @@ import Text.PrettyPrint
 
 import Data.Map (Map)
 import qualified Data.Map as M
+
 
 newtype I a = I { unI :: ReaderT Env IO a }
   deriving (MonadReader Env, Monad, Functor, Applicative)
@@ -81,6 +83,10 @@ top ds = iExpr (Decls (ds ++ [Expr (Apply (Name (wired "main")) [])]))
 
 runtimeError :: String -> I Value
 runtimeError = throwError . ("Runtime error: " ++)
+
+partialEffect :: String -> I Value
+partialEffect s = runtimeError ("partial: " ++ s)
+  -- iExpr (Apply (Name partialName) [Lit (String s)])
 
 typeError :: String -> I Value
 typeError = throwError . ("Type error: " ++)
@@ -202,8 +208,6 @@ matches (p:ps) (v:vs) = M.union <$> match p v <*> matches ps vs
 matches []     []     = Just M.empty
 matches _      _      = Nothing
 
-partialEffect :: String -> I Value
-partialEffect s = iExpr (Apply (Name partialName) [Lit (String s)])
 
 trace :: (PP a, PP b) => a -> I b -> I b
 trace e m =
@@ -219,6 +223,7 @@ iExpr e0 =
                       Lit{} -> False
                       Bin{} -> False
                       Name{} -> False
+                      DataCon{} -> False
                       Quote{} -> False
                       Function{} -> False
                       Lambda{} -> False
@@ -238,6 +243,12 @@ iExpr e0 =
     Bin b ->
       do return (binOp b)
 
+    DataCon dc ->
+      do return (ConV dc [])
+
+    Op{} ->
+      do runtimeError $ "Interpretator doesn't know about effects, run effect convert"
+
     Name n ->
       do mv <- asks (M.lookup n . scope)
          case mv of
@@ -254,7 +265,7 @@ iExpr e0 =
                   case mbs of
                     Just bs -> extendScope bs (iExpr rhs)
                     Nothing -> go cases'
-             go [] = partialEffect "switch"
+             go [] = partialEffect $ pretty e0 ++ "\n on value: " ++ pretty vs
          propagateErrors vs $ go cases
 
     Apply f es ->
@@ -319,10 +330,7 @@ funV Function{fn_name, fn_params, fn_body} closure = f
 declsScope :: [Decl] -> Bindings -> Bindings
 declsScope ds closure = us
   where
-  us = M.fromList $
-        [ (n, funV f (us `M.union` closure))
-        | Let (NameP n) f@Function{} <- ds ] ++
-        [ (n, ConV n []) | Algebraic _ cons <- ds, Con{con_name=n} <- cons ]
+  us = M.fromList [ (n, funV f (us `M.union` closure)) | Let (NameP n) f@Function{} <- ds ]
 
 removeH :: [Value] -> I Value
 removeH [Handlers xs, QuoteV op] =

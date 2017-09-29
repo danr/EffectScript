@@ -8,15 +8,22 @@ function sum(i: r ! iter<int> ! e): int ! e {
     case yield(x, k):
           puts("A: " + show(x))
           sum({k("first")});
-          //puts("B: " + show(x))
-          //sum({k("second")});
+          puts("B: " + show(x))
+          sum({k("second")});
           puts("C: " + show(x))
-    case done(r): puts("done") 2
+    case done(r): puts("done") 1
   }
 }
 
+function onetwo() {
+    u1 = yield(1)
+    u2 = yield(2)
+    puts("end")
+    2
+}
+
 function main() {
-  sum({yield(1); yield(2); puts("end")})
+  sum(onetwo)
 }
 
 

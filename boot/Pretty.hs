@@ -34,7 +34,7 @@ emparens :: Doc -> [Doc] -> Doc
 emparens h bs = cat [h <> "(", nest 2 (csv bs <> ")")]
 
 csv :: [Doc] -> Doc
-csv = fsep . punctuate ","
+csv = sep . punctuate ","
 
 crocodile :: PP a => [a] -> Doc
 crocodile [] = empty
@@ -97,6 +97,8 @@ instance PPrec Expr where
     Lit l -> pp l
     Apply (Bin b) [e1,e2] -> ppr (lprec b) e1 <+> pp b <+> ppr (rprec b) e2 -- todo: precedences
     Name n -> pp n
+    DataCon n -> "mk" <> pp n
+    Op n -> "!" <> pp n
     Quote n -> "'" <> pp n
     Switch es cs -> ("switch" $\ csv (map pp es)) `embrace` (vcat (map pp cs))
     Apply e es -> emparens (ppr 5 e) (map pp es)
@@ -119,12 +121,14 @@ prec e = case e of
   TyApply{}   -> 14
   Lit{}       -> 15
   Name{}      -> 15
+  DataCon{}   -> 15
+  Op{}        -> 15
   Quote{}     -> 15
   Bin{}       -> 15
 
 instance PP Pattern where
   pp p = case p of
-    ConP n ps -> emparens (pp n) (map pp ps)
+    ConP n ps -> emparens ("mk" <> pp n) (map pp ps)
     NameP n -> pp n
     Wild -> "_"
     LitP l -> pp l

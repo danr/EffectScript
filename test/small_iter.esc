@@ -6,17 +6,19 @@ effect iter<a> {
 function sum(i: r ! iter<int> ! e): int ! e {
   switch next(i) {
     case yield(x, k):
+        puts("received " + show(x))
         sum({
           k("apa");
         })
-          puts("never reached")
-          "result"
+        puts("finished from " + show(x))
     case done(r): 2
   }
+          puts("sum done")
+          //"result"
 }
 
 function main() {
-  puts(show(sum({yield(1); "hej"})))
+  puts(show(sum({yield(1); yield(2); "hej"})))
 }
 
 

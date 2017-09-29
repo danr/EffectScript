@@ -1,7 +1,15 @@
 {-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE FlexibleContexts, FlexibleInstances #-}
+{-# LANGUAGE TemplateHaskell, MultiParamTypeClasses #-}
+{-# LANGUAGE PatternGuards #-}
 module AST where
 
 import Data.Function
+import Data.Generics.Geniplate
+import Data.Set (Set)
+import qualified Data.Set as S
+import Data.Map (Map)
+import qualified Data.Map as M
 
 data Name = MkName { name_repr :: String, pos :: (Int, Int) }
 
@@ -79,6 +87,8 @@ data Expr
   | Lit Lit
   | Bin Bin
   | Name Name
+  | DataCon Name
+  | Op Name
   | Quote Name
   | Switch [Expr] [Case]
   | Apply Expr [Expr]
@@ -127,3 +137,51 @@ unitTyConName = wired "Unit"
 
 topHandler :: Name
 topHandler = wired "h_top"
+
+instanceUniverseBi [t| (Expr, Decl) |]
+instanceUniverseBi [t| ([Expr], Pattern) |]
+instanceTransformBi [t| (Expr, Expr) |]
+instanceTransformBi [t| (Pattern, Expr) |]
+
+intuitTypes :: Expr -> Expr
+intuitTypes e0 =
+    transformBi
+      (\ e -> case e of
+        Name n | n `S.member` datacons -> DataCon n
+               | n `S.member` ops -> Op n
+        _ -> e)
+  $ transformBi
+      (\ p -> case p of
+        NameP n | n `S.member` datacons -> ConP n []
+        _ -> p)
+  $ e0
+  where
+  datacons = S.fromList $ map con_name $ concat [ cs | Algebraic _ cs <- universeBi e0 ]
+  ops      = S.fromList $ map con_name $ concat [ cs | Effect _ cs <- universeBi e0 ]
+
+betaReduce :: Expr -> Expr
+betaReduce =
+  transformBi $
+    \ e0 ->
+      case e0 of
+        Lambda ps rhs `Apply` es
+          | all simple ps,
+            S.null (bound_in_es `S.intersection` names_in_ps) ->
+              substList (M.fromList [ (n,e) | (NameP n,e) <- ps `zip` es ]) rhs
+          where
+          bound_in_es = S.fromList [ n | NameP n <- universeBi es ]
+          names_in_ps = S.fromList [ n | NameP n <- ps ]
+          simple p = case p of
+            Wild -> True
+            NameP{} -> True
+            _ -> False
+        _ -> e0
+
+substList :: Map Name Expr -> Expr -> Expr
+substList su =
+  transformBi $
+    \ e0 ->
+      case e0 of
+        Name n | Just e <- M.lookup n su -> e
+        _ -> e0
+
