@@ -1,63 +1,51 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE TupleSections #-}
 module ANF where
 
 import Fresh
 import AST
 import Data.List (transpose)
 
-isValue :: Expr -> Bool
-isValue e0 =
-  case e0 of
-    Lambda{} -> True
-    Function{} -> True
-    Name{} -> True
-    Lit{} -> True
-    Bin{} -> True
-    Op{} -> True
-    DataCon{} -> True
-    Apply Bin{} vs -> all isValue vs
-    Apply DataCon{} vs -> all isValue vs
-    Apply (Name f) vs -> f `elem` [wired "puts", wired "show"] && all isValue vs
-    _ -> False
-
 anf :: Expr -> Fresh Expr
 anf e0 =
   case e0 of
-    Function mn tvs ps mt rhs -> Function mn tvs ps mt <$> anf rhs
-    Lambda ps e -> Lambda ps <$> anf e
-    Lit l  -> return (Lit l)
-    Bin b  -> return (Bin b)
-    Name n -> return (Name n)
-    DataCon n -> return (DataCon n)
-    Op n -> return (Op n)
-    Switch es cases ->
-      do (ds,xs) <-
-           unzip <$>
-             sequence
-               [ let' "x" =<< anf (e `Labels` [c | ConP c _ <- pats])
-               | (e,pats) <- es `zip` transpose [ps | Case ps _ <- cases]
-               ]
-         decls (concat ds) . Switch xs <$>
+    Switch mh vs cases ->
+      do mh' <- maybe (return Nothing) (fmap Just . anf) mh
+         (ds,xs) <- unzip <$> sequence [ anfValue "x" v | v <- vs ]
+         decls (concat ds) . Switch mh' xs <$>
            sequence
              [ Case ps <$> anf rhs
              | Case ps rhs <- cases
              ]
-    Apply e es ->
-      do (d,f) <- let' "f" =<< anf e
-         (ds,xs) <- unzip <$> sequence [ let' "x" =<< anf e | e <- es ]
-         return (decls (concat (d:ds)) (Apply f xs))
+    Op l vs ->
+      do (ds,xs) <- unzip <$> sequence [ anfValue "x" x | x <- vs ]
+         return (decls (concat ds) (Op l xs))
+    Apply v vs ->
+      do (d,f) <- anfValue "f" v
+         (ds,xs) <- unzip <$> sequence [ anfValue "x" x | x <- vs ]
+         return (decls (concat (d:ds)) (apply f xs))
     Seq (Let p e) b ->
       do l <- Let p <$> anf e
-         Seq l <$> anf b
-    Seq d b -> Seq d <$> anf b
+         mkSeq l =<< anf b
+    Seq d b -> mkSeq d =<< anf b
+    Done v ->
+      do (d,v') <- anfValue "v" v
+         return (decls d (Done v'))
     e `Sig` t -> (`Sig` t) <$> anf e
-    e `Labels` ls -> (`Labels` ls) <$> anf e
-    e `TyApply` ts -> (`TyApply` ts) <$> anf e
+    v `TyApply` ts ->
+      do (d,vt) <- anfValue "t" v
+         return (decls d (vt `TyApply` ts))
+--    e `Labels` ls -> (`Labels` ls) <$> anf e
 
-let' :: String -> Expr -> Fresh ([Decl], Expr)
-let' hint e0
-  | isValue e0 = return ([], e0)
-  | otherwise =
+anfValue :: String -> Value -> Fresh ([Decl], Value)
+anfValue hint =
+  \ case
+    Function mn tvs ps mt rhs -> ([],) . Function mn tvs ps mt <$> anf rhs
+    Lambda ps e -> ([],) . Lambda ps <$> anf e
+    Unrestricted e ->
       do x <- fresh hint
-         return ([Let (NameP x) e0], Name x)
+         e' <- anf e
+         return ([Let (NameP x) e'], Name x)
+    v -> return ([], v)
 

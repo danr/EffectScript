@@ -1,10 +1,12 @@
 {-# LANGUAGE OverloadedStrings, TypeOperators #-}
 module Pretty where
 
-import AST
+import AST hiding (($$))
 import Text.PrettyPrint
 import Data.List (intersperse)
 import Text.Show.Pretty (ppDoc)
+import Data.Map (Map)
+import qualified Data.Map as M
 
 instance PP a => PP [a] where
   pp = csv . map pp
@@ -14,13 +16,16 @@ data Showable a = Show a
 instance Show a => PP (Showable a) where
   pp (Show x) = ppDoc x
 
+{-
 data Infix a b = Infix String a b
 
 (<--) = Infix "<-"
 (-|) = Infix "-|"
+-
 
 instance (PP a, PP b) => PP (Infix a b) where
   pp (Infix s a b) = pp a <+> text s $\ pp b
+  -}
 
 ($\) :: Doc -> Doc -> Doc
 d $\ d2 = sep [d, nest 2 d2]
@@ -48,6 +53,7 @@ class PPrec a where
 
 instance PP Name where
   pp (MkName n _) = text (if take 1 n == "#" then drop 1 n else n)
+  pp (Refreshed n i) = pp n <> "_" <> int i
 
 pretty :: PP a => a -> String
 pretty = render . pp
@@ -88,6 +94,19 @@ instance (PP a, PP b) => PP (a `WithOptional` b) where
 instance PP Expr where pp = ppr 0
 instance PPrec Expr where
   ppr i e0 = parIf (prec e0 <= i) $ case e0 of
+    Apply (Bin b) [v1,v2] -> ppr (lprec b) v1 <+> pp b <+> ppr (rprec b) v2 -- todo: precedences
+    Switch Nothing  vs cs -> ("switch" $\ csv (map pp vs)) `embrace` (vcat (map pp cs))
+    Switch (Just e) vs cs -> ("handle" $\ csv (pp e:map pp (vs))) `embrace` (vcat (map pp cs))
+    Apply v vs -> emparens (ppr 5 v) (map pp vs)
+    TyApply v ts -> ppr 15 v <> crocodile ts
+    Op n vs -> emparens ("!" <> pp n) (map pp vs)
+    Seq d e -> pp d $$ pp e
+    Sig e t -> ppr 3 e <> ":" $\ pp t
+    Done v -> "done" $\ ppr 14 v
+
+instance PP Value where pp = ppr 0
+instance PPrec Value where
+  ppr i v0 = parIf (precV v0 <= i) $ case v0 of
     Function mf tvs ps mrt e ->
       ("function" $\ emparens (mf ? id <> crocodile tvs) (map pp ps))
       `embrace` pp e
@@ -95,36 +114,36 @@ instance PPrec Expr where
     Lambda ps ds@Seq{} -> embrace (parens (csv (map pp ps)) $\ "=>") (pp ds)
     Lambda ps e -> parIf (i > 12 || length ps > 1) (csv (map pp ps)) <+> "=>" $\ ppr 4 e
     Lit l -> pp l
-    Apply (Bin b) [e1,e2] -> ppr (lprec b) e1 <+> pp b <+> ppr (rprec b) e2 -- todo: precedences
+    Bin b -> parens (pp b)
     Name n -> pp n
-    DataCon n -> "mk" <> pp n
-    Op n -> "!" <> pp n
-    Quote n -> "'" <> pp n
-    Switch es cs -> ("switch" $\ csv (map pp es)) `embrace` (vcat (map pp cs))
-    Apply e es -> emparens (ppr 5 e) (map pp es)
-    TyApply e ts -> ppr 15 e <> crocodile ts
-    Seq d e -> pp d $$ pp e
-    Sig e t -> ppr 3 e <> ":" $\ pp t
-    Bin b -> pp b
-    e `Labels` ls -> ppr 3 e <> "[" $\ fsep (map pp ls) <> "]"
+    DataCon n vs -> emparens ("mk" <> pp n) (map pp vs)
+    Unrestricted e -> "^" <> ppr i e
+    -- v `Labels` ls -> ppr 3 v <> "[" <> fsep (map pp ls) <> "]"
+
+instance (PP a, PP b) => PP (Map a b) where
+  pp bs =
+     fsep $ punctuate comma
+     [ pp (x `With` v) | (x,v) <- M.toList bs, interesting x]
+       where interesting x = True -- x `M.notMember` wiredBindings
 
 prec :: Expr -> Int
 prec e = case e of
   Seq{}       -> 15
   Sig{}       -> 2
-  Labels{}    -> 2
-  Lambda{}    -> 4
   Apply (Bin b) [_,_] -> let (p, _, _) = binPrec b in p
   Apply{}     -> 14
-  Function{}  -> 14
+  Op{}        -> 14
   Switch{}    -> 14
   TyApply{}   -> 14
-  Lit{}       -> 15
-  Name{}      -> 15
-  DataCon{}   -> 15
-  Op{}        -> 15
-  Quote{}     -> 15
-  Bin{}       -> 15
+  Done v      -> precV v
+
+precV :: Value -> Int
+precV e = case e of
+  Lambda{}       -> 4
+  Function{}     -> 14
+  Unrestricted e -> prec e
+  _              -> 15
+
 
 instance PP Pattern where
   pp p = case p of

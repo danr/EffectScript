@@ -33,6 +33,10 @@ ecVal e0 =
 ec :: Expr -> Expr -> Expr -> EC Expr
 ec e0 h k =
   case e0 of
+    Let ps (Apply (Name local) [e1]) `Seq` e2
+      | local == localName ->
+         do ec e1 h . Lambda [Wild, ps] =<< ec e2 h k
+
     Let ps v1 `Seq` e2 | isValue v1 ->
       do v' <- ecVal v1
          (Let ps v' `Seq`) <$> ec e2 h k
@@ -48,18 +52,93 @@ ec e0 h k =
     e `Sig` _ -> ec e h k
     TyApply e _ -> ec e h k
 
-    Switch vs cases ->
-      do Switch vs <$>
+    v | isValue v -> return (k `Apply` [h, v])
+
+    Op{} -> error "unapplied op"
+
+    Switch Nothing vs cases ->
+      do Switch Nothing vs <$>
            sequence
              [ Case ps <$> ec rhs h k
              | Case ps rhs <- cases
              ]
 
-    v | isValue v -> return (k `Apply` [h, v])
+{-
 
-    Op{} -> error "unapplied op"
+    [[handle vp, v1, v2 {
+        case op(x1, x2), k, s1, s2: P
+        case done(r), _, s1, s2: Q
+      }|h0|k0]]
 
-    Apply (Name next) [p] `Labels` labels
+
+=>
+
+    function loop(h, x, v1, v2) {
+      switch x, v1, v2 {
+        case pair(op(x1, x2), pk), s1, s2:
+          let pk0 = pk
+          let pk = (y, t1, t2, h, k) => k(h, pk0(h + {op:(h, x) => loop(h, x, t1, t2)}, y))
+          in [[P|h-op|k0]]
+        case pair(done(r), _), s1, s2:
+          [[Q|h-op|k0]]
+      }
+    }
+
+    vp(h0 + {op:(h, x) => loop(h, x, v1, v2)},
+       (_h, x) => absurd x
+
+-}
+
+{-
+    Switch (Just (p `Labels` labels)) vs cases ->
+      do vp <- ecVal p
+         loop <- fresh "loop"
+         x <- fresh "x"
+         ss <- sequence [ fresh "s" | _ <- vs ]
+         h' <- fresh "h"
+         let label_repr:_ = labels
+         cases <- sequence
+           [ do rhs' <- ec rhs (removeHandler $$ [Name h', Quote label_repr]) k
+                y <- fresh "y"
+                ts <- sequence [ fresh "t" | _ <- vs ]
+                hw <- fresh "hw"
+                k <- fresh "k"
+                h'' <- fresh "h"
+                x' <- fresh "x"
+                w <- fresh "kw"
+                case p_k of
+                  NameP pk ->
+                    do let p_k_lam =
+                             lam
+                               ((y:ts) ++ [hw,w])
+                               (k $$
+                                   [Name y,
+                                    addHandler $$
+                                     (Name h'
+                                     :lam [h'', x'] (loop $$ (map Name ([h'', x'] ++ ts)))
+                                     :[ Quote label | label <- labels, label /= doneName ])
+                                   , Name w])
+                       return $ Case
+                         (ConP pairName [p_op,p_k]:ps)
+                         (inlineLet (NameP k) (Name pk) (inlineLet p_k p_k_lam rhs'))
+                  Wild ->
+                    return $ Case (ConP pairName [p_op,p_k]:ps) rhs'
+
+           | Case (p_op:p_k:ps) rhs <- cases
+           ]
+         return $ Let (NameP loop)
+             (Function (Just loop) [] (map (Without . NameP) (h':x:ss)) Nothing
+                (Switch Nothing (Name x:map Name ss) cases))
+            `Seq` (vp `Apply` [ addHandler $$
+                                 (h:
+                                  lam [h', x] (loop $$ (map Name [h',x] ++ vs)):
+                                  [ Quote label | label <- labels, label /= doneName ])
+                              , lam [h', x] (Lit (String "Void") `Apply` [Name x])
+                              ])
+                              -}
+
+
+    Apply (Name next `Labels` labels) [p]
       | next == nextName ->
       do let label_repr:_ = labels
          vp <- ecVal p
@@ -83,20 +162,16 @@ ec e0 h k =
     Apply (Op op) xs ->
       do y <- fresh "y"
          h' <- fresh "h"
-         k' <- fresh "k"
          return $
            (getHandler $$ [h, Quote op]) `Apply` [
              h,
-             DataCon op `Apply`
-                (xs ++ [Lambda [NameP y, NameP h', NameP k']
-                        (k `Apply` [Name h', Name y])])
+               DataCon op `Apply` (xs++[
+                Lambda [NameP y, NameP h', Wild]
+                             (k `Apply` [Name h', Name y])])
            ]
     Apply f xs ->
       do vs <- mapM ecVal xs
          return (f `Apply` (vs ++ [h,k]))
 
     e `Labels` _ -> ec e h k
-
-f $$ xs = Apply (Name f) xs
-lam ns rhs = Lambda (map NameP ns) rhs
 

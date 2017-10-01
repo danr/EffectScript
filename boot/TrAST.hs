@@ -1,4 +1,6 @@
 {-# LANGUAGE TypeFamilies, KindSignatures, TypeOperators #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE LambdaCase #-}
 module TrAST where
 
 import qualified AbsEffectScript as BNF
@@ -14,23 +16,27 @@ instance Tr a => Tr [a] where
   type To [a] = [To a]
   tr = map tr
 
+instance Tr (Int, Int) where
+  type To (Int, Int) = AST.Pos
+  tr (r,c) = AST.Pos r c
+
 instance Tr BNF.Name where
   type To BNF.Name = AST.Name
-  tr (BNF.Name (p,s)) = AST.MkName s p
+  tr (BNF.Name (p,s)) = AST.MkName s (tr p)
 
 instance Tr BNF.NameP where
   type To BNF.NameP = AST.Name
-  tr (BNF.NameP (p,s)) = AST.MkName (init s) p
+  tr (BNF.NameP (p,s)) = AST.MkName (init s) (tr p)
 
 instance Tr BNF.NameK where
   type To BNF.NameK = AST.Name
-  tr (BNF.NameK (p,s)) = AST.MkName (init s) p
+  tr (BNF.NameK (p,s)) = AST.MkName (init s) (tr p)
 
 instance Tr BNF.Program where
   type To BNF.Program = AST.Expr
   tr (BNF.Program ds) =
     trDecls (ds ++
-      [BNF.Expr (BNF.Call (BNF.NameP ((0,0), "main(")) [])])
+      [BNF.Expr (BNF.Call (BNF.NameP ((0,0), "main(")) [BNF.Unit])])
 
 instance Tr BNF.Param where
   type To BNF.Param = AST.Pattern `WithOptional` AST.Type
@@ -66,47 +72,49 @@ trDecls (d:ds) = d' `AST.Seq` trDecls ds
       BNF.Expr (BNF.Let e rhs) -> AST.Let (trPat e) (tr rhs)
       BNF.Expr e ->
         case tr e of
-          fn@AST.Function{AST.fn_name=Just n} -> AST.Let (AST.NameP n) fn
+          AST.Done fn@AST.Function{AST.fn_name=Just n} -> AST.Let (AST.NameP n) (AST.Done fn)
           tr_e -> AST.Let AST.Wild tr_e
 
 instance Tr BNF.Expr where
   type To BNF.Expr = AST.Expr
   tr e0 = case e0 of
-    BNF.Unit                -> AST.Lit AST.Unit
-    BNF.Function fh optt ds -> tr fh (tr optt) (trDecls ds)
-    BNF.Lit lit             -> AST.Lit (tr lit)
-    BNF.NameMono x          -> AST.Name (tr x)
+    BNF.Unit                -> AST.Done $ AST.Lit AST.Unit
+    BNF.Function fh optt ds -> AST.Done $ tr fh (tr optt) (trDecls ds)
+    BNF.Lit lit             -> AST.Done $ AST.Lit (tr lit)
+    BNF.NameMono x          -> AST.Done $ AST.Name (tr x)
     BNF.NamePoly x ts       -> AST.Name (tr x) `AST.TyApply` tr ts
-    BNF.WildP               -> AST.Name AST.wildName
-    BNF.Switch e cs         -> AST.Switch (tr (Commas e)) (tr cs)
-    BNF.NSwitch cs          -> AST.Switch [] (tr cs)
+    BNF.WildP               -> AST.Done $ AST.Name AST.wildName
+    BNF.Handle e cs         -> let f:as = tr (Commas e)
+                               in  AST.Switch (Just f) (map AST.unrestricted as) (tr cs)
+    BNF.Switch e cs         -> AST.Switch Nothing (map AST.unrestricted (tr (Commas e))) (tr cs)
+    BNF.NSwitch cs          -> AST.Switch Nothing [] (tr cs)
 
-    BNF.ApplyT e ts         -> tr e `AST.TyApply` tr ts
-    BNF.Apply e es          -> foldl AST.Apply (tr e) (map (tr . Commas) es)
-    BNF.Call f es           -> foldl AST.Apply (AST.Name (tr f)) (map (tr . Commas) es)
+    BNF.ApplyT e ts         -> AST.unrestricted (tr e) `AST.TyApply` tr ts
+    BNF.Apply e es          -> foldl AST.uApply (tr e) (map (tr . Commas) es)
+    BNF.Call f es           -> foldl AST.uApply (AST.Done (AST.Name (tr f))) (map (tr . Commas) es)
 
     BNF.CallTy f ts es      -> tr (BNF.NamePoly f ts `BNF.Apply` es)
     BNF.ApplyTE e ts es     -> tr (BNF.Apply (e `BNF.ApplyT` ts) es)
 
-    BNF.Mul e1 e2           -> AST.Bin AST.Mul `AST.Apply` [tr e1, tr e2]
-    BNF.Div e1 e2           -> AST.Bin AST.Div `AST.Apply` [tr e1, tr e2]
-    BNF.Mod e1 e2           -> AST.Bin AST.Mod `AST.Apply` [tr e1, tr e2]
-    BNF.Add e1 e2           -> AST.Bin AST.Add `AST.Apply` [tr e1, tr e2]
-    BNF.Sub e1 e2           -> AST.Bin AST.Sub `AST.Apply` [tr e1, tr e2]
-    BNF.Eq e1 e2            -> AST.Bin AST.Eq `AST.Apply` [tr e1, tr e2]
-    BNF.Ne e1 e2            -> AST.Bin AST.Ne `AST.Apply` [tr e1, tr e2]
-    BNF.Lt e1 e2            -> AST.Bin AST.Lt `AST.Apply` [tr e1, tr e2]
-    BNF.Le e1 e2            -> AST.Bin AST.Le `AST.Apply` [tr e1, tr e2]
-    BNF.Gt e1 e2            -> AST.Bin AST.Gt `AST.Apply` [tr e1, tr e2]
-    BNF.Ge e1 e2            -> AST.Bin AST.Ge `AST.Apply` [tr e1, tr e2]
+    BNF.Mul e1 e2           -> AST.Done (AST.Bin AST.Mul) `AST.uApply` [tr e1, tr e2]
+    BNF.Div e1 e2           -> AST.Done (AST.Bin AST.Div) `AST.uApply` [tr e1, tr e2]
+    BNF.Mod e1 e2           -> AST.Done (AST.Bin AST.Mod) `AST.uApply` [tr e1, tr e2]
+    BNF.Add e1 e2           -> AST.Done (AST.Bin AST.Add) `AST.uApply` [tr e1, tr e2]
+    BNF.Sub e1 e2           -> AST.Done (AST.Bin AST.Sub) `AST.uApply` [tr e1, tr e2]
+    BNF.Eq e1 e2            -> AST.Done (AST.Bin AST.Eq) `AST.uApply` [tr e1, tr e2]
+    BNF.Ne e1 e2            -> AST.Done (AST.Bin AST.Ne) `AST.uApply` [tr e1, tr e2]
+    BNF.Lt e1 e2            -> AST.Done (AST.Bin AST.Lt) `AST.uApply` [tr e1, tr e2]
+    BNF.Le e1 e2            -> AST.Done (AST.Bin AST.Le) `AST.uApply` [tr e1, tr e2]
+    BNF.Gt e1 e2            -> AST.Done (AST.Bin AST.Gt) `AST.uApply` [tr e1, tr e2]
+    BNF.Ge e1 e2            -> AST.Done (AST.Bin AST.Ge) `AST.uApply` [tr e1, tr e2]
 
-    BNF.Lambda e rhs        -> AST.Lambda (trPats e) (tr rhs)
-    BNF.Let e rhs           -> error $ "Let in illegal position" ++ show e0
+    BNF.Lambda e rhs        -> AST.Done $ AST.Lambda (trPats e) (tr rhs)
+    BNF.Let{}               -> error $ "Let in illegal position" ++ show e0
                                -- AST.Let (trPat e) (tr rhs)
     BNF.Signature e t       -> AST.Sig (tr e) (tr t)
-    BNF.Lambda0 ds          -> AST.Lambda [] (trDecls ds)
+    BNF.Lambda0 ds          -> AST.Done $ AST.Lambda [] (trDecls ds)
 
-    BNF.Comma e1 e2         -> error $ "Comma in illegal position" ++ show e0
+    BNF.Comma{}             -> error $ "Comma in illegal position" ++ show e0
 
 newtype Commas = Commas BNF.Expr
   deriving (Eq, Ord, Show)
@@ -117,7 +125,7 @@ instance Tr Commas where
     where
     go :: Int -> Commas -> [AST.Expr]
     go 0 (Commas BNF.Unit) = []
-    go i (Commas e) = case e of
+    go _ (Commas e0) = case e0 of
       BNF.Comma e1 e2 -> go 1 (Commas e1) ++ go 1 (Commas e2)
       e -> [tr e]
 
@@ -128,13 +136,15 @@ trPats :: BNF.Expr -> [AST.Pattern]
 trPats = map pat . tr . Commas
 
 pat :: AST.Expr -> AST.Pattern
-pat e = case e of
-  AST.Lit lit               -> AST.LitP lit
-  AST.Name x
-    | x == AST.wildName     -> AST.Wild
-    | otherwise             -> AST.NameP x
-  AST.Apply (AST.Name k) es -> AST.ConP k (map pat es)
-  e -> error $ "Not a pattern: " ++ show e
+pat =
+  \ case
+    AST.Done (AST.Lit lit) -> AST.LitP lit
+    AST.Done (AST.Name x)
+      | x == AST.wildName     -> AST.Wild
+      | otherwise             -> AST.NameP x
+    AST.Done (AST.DataCon k vs) -> AST.ConP k (map (pat . AST.Done) vs)
+    AST.Name k `AST.Apply` es -> AST.ConP k (map (pat . AST.Done) es)
+    e -> error $ "Not a pattern: " ++ show e
 
 instance Tr BNF.Lit where
   type To BNF.Lit = AST.Lit
@@ -185,7 +195,7 @@ instance Tr BNF.DeclHead where
     BNF.PolyHead x ns -> AST.TypeHead (tr x) (tr ns)
 
 instance Tr BNF.FunctionHead where
-  type To BNF.FunctionHead = Maybe AST.Type -> AST.Expr -> AST.Expr
+  type To BNF.FunctionHead = Maybe AST.Type -> AST.Expr -> AST.Value
   tr fh = case fh of
     BNF.Anonymous ps              -> AST.Function Nothing       []       (tr ps)
     BNF.MonoFunctionHead x ps     -> AST.Function (Just (tr x)) []       (tr ps)

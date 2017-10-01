@@ -1,14 +1,30 @@
 
 effect iter<a> {
   yield(a)
-  doneeff(string)
   flip(): bool
+  done_iter(string)
 }
 
+effect state<a> {
+  get(): a
+  set(a)
+  done_state(string)
+}
+
+function inc() {
+  set(get() + 1)
+}
+
+
 type list<a> {
-  Cons(x, xs)
+  Cons(a, list<a>)
   Nil
 }
+
+type Pair<a, b> {
+  Pair(a, b)
+}
+
 
 type Bool {
   False
@@ -22,27 +38,43 @@ function append<a>(xs: list<a>, ys: list<a>): list<a> {
   }
 }
 
+function state<a>(s0: a, i: r ! state<a> ! e): r ! e {
+  handle i(), s0 {
+    case get(k), s: k(s, s)
+    case set(s, k), _: k("unit", s)
+    case done(r), s: Pair(s, r)
+  }
+}
+
 function collect<a, e, r>(i: r ! iter<a> ! e): list<a> ! e {
-  switch next({x = i(); doneeff(x)}) {
-    case yield(x, k): Cons(x, collect({k("unit")}))
-    case flip(k): append(collect({k(False)}),
-                         collect({k(True)}))
-    case doneeff(u, _): Nil()
-    // may not be called
+  handle i() {
+    case yield(x, k): puts("Yielding: " + show(x)); Cons(x, k("unit"))
+    case flip(k): append(k(False), k(True))
     case done(_): Nil()
   }
 }
 
 function main() {
-  collect({
-    yield(1)
+  p = () => {
+    //yield(404)
     switch flip() {
-      case False: yield(4)
-      case True: yield(2); yield(3)
+      case False: puts("In false branch now") inc() yield(1+get())
+      case True: puts("In true branch now") yield(0)
     }
-    yield(5)
-  })
+    //yield(2)
+    u = get()
+    yield(u)
+    //puts("Called get: " + show(u))
+    inc()
+    puts("End of p")
+  }
+  //puts("Done")
+
+  //puts(show(state(100, () => { collect(p) })))
+  //puts("Done")
+  //puts(show(state(100, () => { collect({ yield(1) }) })))
+  //state(100, () => { collect(p) })
+  collect(() => state(100, p))
+
 }
-
-
 

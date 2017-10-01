@@ -4,18 +4,26 @@ effect iter<a> {
 }
 
 function map(i: r ! iter<a>, f: a -> b ! e): r ! iter<b> ! e {
-  switch next(i) {
-    case yield(a, k): yield(f(a), map(k(9876), f))
+  handle i() {
+    case yield(a, k): yield(f(a)) k("unit")
     case done(r): r
   }
 }
 
 function sum(i: r ! iter<int> ! e): int ! e {
-  switch next(i) {
-    case yield(x, k): x + sum({k(8765)})
-    case done(r): r
+  handle i() {
+    case yield(x, k): x + k("unit")
+    case done(r): 0
   }
 }
+
+function sum_acc(i: r ! iter<int> ! e): int ! e {
+  handle i(), 0 {
+    case yield(x, k), acc: k("unit", x + acc)
+    case done(r), acc: acc
+  }
+}
+
 
 function onetwo() {
   yield(1)
@@ -27,6 +35,7 @@ function incr(x) {
 }
 
 function main() {
-  puts(show(sum(map(onetwo, incr))))
+  puts(show(sum({map(onetwo, incr)})))
+  // puts(show(sum(onetwo)))
 }
 

@@ -4,21 +4,22 @@ effect iter<a> {
 }
 
 function sum(i: r ! iter<int> ! e): int ! e {
-  switch next(i) {
+  handle i() {
     case yield(x, k):
-        puts("received " + show(x))
-        sum({
-          k("apa");
-        })
-        puts("finished from " + show(x))
+        //puts("received " + show(x))
+        1 + k("unit")
+        //puts("finished from " + show(x))
     case done(r): 2
   }
-          puts("sum done")
-          //"result"
+  //puts("sum done")
 }
 
 function main() {
-  puts(show(sum({yield(1); yield(2); "hej"})))
+  puts(show(sum({
+      yield(1);
+      //yield(2);
+      //"hej"
+    })))
 }
 
 

@@ -32,6 +32,7 @@ NameMono.  Expr14 ::= Name;
 NamePoly.  Expr14 ::= NameK [Type] ">";
 WildP.     Expr14 ::= "_";
 
+Handle.    Expr14 ::= "handle" Expr3 "{" [Case] "}";
 Switch.    Expr14 ::= "switch" Expr3 "{" [Case] "}";
 NSwitch.   Expr14 ::= "switch" "{" [Case] "}";
 

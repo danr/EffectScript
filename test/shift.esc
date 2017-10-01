@@ -1,0 +1,35 @@
+effect shift<a, e> {
+  shift(f)
+}
+
+function reset(x) {
+  handle x() {
+    case shift(f, k): f(k)
+    case done(r): r
+  }
+}
+
+type list<a> {
+  Cons(a, list<a>)
+  Nil
+}
+
+function append<a>(xs: list<a>, ys: list<a>): list<a> {
+  switch xs {
+    case Cons(u,us): Cons(u,append(us,ys))
+    case Nil: ys
+  }
+}
+
+type pair<a, b> { Pair(a, b) }
+
+function main() {
+  // el Monado de Listo para Disguiso
+  reset({
+    x = shift(rest => { append(rest(3), rest(5)) })
+    y = shift(rest => { append(rest(2), rest(4)) })
+    Cons(Pair(x, y), Nil)
+  })
+}
+
+

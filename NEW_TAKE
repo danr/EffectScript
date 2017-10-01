@@ -13,7 +13,7 @@ eff ::= (l(t): t, ..., l(t): t)
 
 e ::= let x = e in e
    |  case v of l x y -> e; ...; l x y -> e
-   |  v
+   |  "return" v
    |  v(v, ..,  v)
    |  do l v      -- the operation
    |  next eff v

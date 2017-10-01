@@ -3,6 +3,7 @@
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE LambdaCase #-}
 module Interpret where
 
 import Control.Monad
@@ -136,6 +137,7 @@ putsBuiltin = BuiltinV $ \ xs -> case xs of
 showBuiltin :: Value
 showBuiltin = BuiltinV $ \ xs -> case xs of
   [LitV x] -> return (LitV (String (showLit x)))
+  [x@ConV{}] -> return (LitV (String (pretty x)))
   _ -> typeError $ "show called with " ++ show (length xs) ++ " args"
 
 showLit :: Lit -> String
@@ -217,6 +219,7 @@ trace e m =
      -- io $ putStrLn (pretty (r <-- e))
      return r
 
+
 iExpr :: Expr -> I Value
 iExpr e0 =
   let interesting = case e0 of
@@ -258,7 +261,10 @@ iExpr e0 =
     Quote n ->
       do return (QuoteV n)
 
-    Switch es cases ->
+    Switch Just{} es cases ->
+      do runtimeError $ "Interpretator doesn't know about effect handlers, run effect convert"
+
+    Switch Nothing es cases ->
       do vs <- mapM iExpr es
          let go (Case ps rhs:cases') =
                do mbs <- return $ matches ps vs
@@ -279,7 +285,10 @@ iExpr e0 =
              do mbs <- return $ matches ps vs
                 case mbs of
                   Just bs -> inScope closure $ extendScope bs (iExpr rhs)
-                  Nothing -> partialEffect $ "function argument: " ++ pretty ps ++ pretty vs
+                  Nothing -> partialEffect $ "function argument:" ++
+                                             "\nPatterns: " ++ pretty ps ++
+                                             "\nArguments: " ++ pretty vs ++
+                                             "\nFunction body: " ++ pretty rhs
 
            ErrV x -> return (ErrV x)
 
@@ -348,5 +357,5 @@ getH :: [Value] -> I Value
 getH [Handlers xs, QuoteV op] =
   case [ k | (ops, k) <- xs, op `elem` ops ] of
     k:_ -> return k
-    [] -> error $ "Unregistered handler for " ++ pretty op
+    [] -> error $ "Unregistered handler for " ++ pretty op ++ " in " ++ show (map fst xs)
 

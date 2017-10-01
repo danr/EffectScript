@@ -1,0 +1,11 @@
+type C { A B }
+function mini(x) {
+  switch x {
+    case A: 1 + mini(B)
+    case B: 1 + 1
+   }
+}
+
+function main() {
+  puts(show(mini(A)))
+}
