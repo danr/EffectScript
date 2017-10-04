@@ -14,7 +14,8 @@ separator Param ",";
 Algebraic. Decl ::= "type" DeclHead "{" [Con] "}";
 Effect.    Decl ::= "effect" DeclHead "{" [Con] "}";
 Alias.     Decl ::= "alias" DeclHead "=" Type;
-Expr.      Decl ::= Expr2;
+Expr.      Decl ::= Expr3;
+Let.       Decl ::= Expr14 "=" Expr4;
 _.         Decl ::= Decl ";";
 
 Nul.   Con ::= Name OptType;
@@ -22,9 +23,6 @@ NulEx. Con ::= NameK [Name] ">" OptType;
 Con.   Con ::= NameP [TypeParam] ")" OptType;
 ConEx. Con ::= NameK [Name] ">(" [TypeParam] ")" OptType;
 _.     Con ::= Con ";";
-
-ExprRhs. Rhs ::= Expr4;
-DeclRhs. Rhs ::= "{" [Decl] "}";
 
 Function.  Expr14 ::= "function" FunctionHead ")" OptType "{" [Decl] "}";
 Lit.       Expr14 ::= Lit;
@@ -34,7 +32,6 @@ WildP.     Expr14 ::= "_";
 
 Handle.    Expr14 ::= "handle" Expr3 "{" [Case] "}";
 Switch.    Expr14 ::= "switch" Expr3 "{" [Case] "}";
-NSwitch.   Expr14 ::= "switch" "{" [Case] "}";
 
 Call.      Expr14 ::= NameP [Expr] ")";
 CallTy.    Expr14 ::= NameK [Type] ">(" [Expr] ")";
@@ -55,21 +52,35 @@ Le.   Expr5  ::= Expr6 "<=" Expr6;
 Gt.   Expr5  ::= Expr6 ">"  Expr6;
 Ge.   Expr5  ::= Expr6 ">=" Expr6;
 
-Lambda.    Expr4  ::= Expr12 "=>" Rhs;
-Let.       Expr4  ::= Expr12 "=" Rhs; -- this is wrong, k = { ds } should be ok and mean a lambda
-Comma.     Expr3  ::= Expr4 "," Expr3;
-Signature. Expr2  ::= Expr3 ":" Type;
-Lambda0.   Expr2  ::= "{" [Decl] "}";
-            -- ^ low to not conflict with Rhs, can be improved to have { } next to binary operators
-Unit.      Expr   ::= ;
+Lambda.    Expr4  ::= Expr12 "=>" Expr4;
+Lambda0.   Expr4  ::= "{" [Decl] "}";
+Signature. Expr3  ::= Expr4 ":" Type;
+Comma.     Expr2  ::= Expr3 "," Expr2 ;
+Unit.      Expr2  ::= ;
 
 
-coercions Expr 14;
+_.   Expr   ::= Expr1 ;
+_.   Expr1  ::= Expr2 ;
+_.   Expr2  ::= Expr3 ;
+_.   Expr3  ::= Expr4 ;
+_.   Expr4  ::= Expr5 ;
+_.   Expr5  ::= Expr6 ;
+_.   Expr6  ::= Expr7 ;
+_.   Expr7  ::= Expr8 ;
+_.   Expr8  ::= Expr9 ;
+_.   Expr9  ::= Expr10 ;
+_.   Expr10 ::= Expr11 ;
+_.   Expr11 ::= Expr12 ;
+_.   Expr12 ::= Expr13 ;
+_.   Expr13 ::= Expr14 ;
+Par. Expr14 ::= "(" Expr  ")" ;
 
 Integer. Lit ::= Integer;
 String.  Lit ::= String;
 
-Case. Case ::= "case" Expr3 ":" [Decl];
+separator Expr14 ",";
+
+Case. Case ::= "case" [Expr14] ":" [Decl];
 
 NameTy.    Type3 ::= Name ;
 AppTy.     Type3 ::= NameK [Type] ">" ;

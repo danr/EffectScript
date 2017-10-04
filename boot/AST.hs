@@ -55,6 +55,9 @@ data TypeHead
   = TypeHead { ty_con :: Name, ty_tvs :: [Name] }
   deriving (Eq, Ord, Show)
 
+boolDecl = Algebraic (TypeHead (wired "boolean") [])
+                     [Con trueName [] [] Nothing, Con falseName [] [] Nothing]
+
 data Decl
   = Algebraic TypeHead [Con]
   | Effect TypeHead [Con]
@@ -255,7 +258,8 @@ intuitTypes e0 =
         _ -> p)
   $ e0
   where
-  datacons = S.fromList $ map con_name $ concat [ cs | Algebraic _ cs <- universeBi e0 ]
+  with_bools = boolDecl `Seq` e0
+  datacons = S.fromList $ map con_name $ concat [ cs | Algebraic _ cs <- universeBi with_bools ]
   ops      = S.fromList $ map con_name $ concat [ cs | Effect _ cs <- universeBi e0 ]
 
 betaReduce :: Expr -> Fresh Expr

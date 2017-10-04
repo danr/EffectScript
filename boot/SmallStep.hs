@@ -86,7 +86,7 @@ binOp :: Bin -> [Value] -> Value
 binOp bop =
   case bop of
     Mul -> intOp (*)
-    Div -> intOp (*)
+    Div -> intOp div
     Mod -> intOp mod
     Add -> intStringOp (+) (++)
     Sub -> intOp (-)
@@ -140,7 +140,7 @@ match _ _ = Nothing
 
 matches :: [Pattern] -> [Value] -> Maybe Match
 matches (p:ps) (e:es) = M.union <$> match p e <*> matches ps es
-matches []     []     = Just M.empty
+matches []     _      = Just M.empty
 matches _      _      = Nothing
 
 just :: Expr -> Fresh (Maybe Expr)
@@ -188,7 +188,7 @@ step top = \ case
           vs' <- sequence [ fresh "v" | _ <- vs ]
           k <- refreshValue (Lambda (map NameP (y:vs'))
                              (Switch (Just (unCtx ctx (Name y))) (map Name vs') cs))
-          step top (Switch Nothing (DataCon l (lvs ++ [k]):vs) cs)
+          step top (Switch Nothing (DataCon l lvs:vs ++ [k]) cs)
 
     | otherwise -> fmap (\ e' -> Switch (Just e') vs cs) <$> step top e
 

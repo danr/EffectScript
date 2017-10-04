@@ -116,7 +116,7 @@ instance PPrec Value where
     Lit l -> pp l
     Bin b -> parens (pp b)
     Name n -> pp n
-    DataCon n vs -> emparens ("mk" <> pp n) (map pp vs)
+    DataCon n vs -> emparens (pp n) (map pp vs)
     Unrestricted e -> "^" <> ppr i e
     -- v `Labels` ls -> ppr 3 v <> "[" <> fsep (map pp ls) <> "]"
 
@@ -147,7 +147,7 @@ precV e = case e of
 
 instance PP Pattern where
   pp p = case p of
-    ConP n ps -> emparens ("mk" <> pp n) (map pp ps)
+    ConP n ps -> emparens (pp n) (map pp ps)
     NameP n -> pp n
     Wild -> "_"
     LitP l -> pp l

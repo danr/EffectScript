@@ -1,0 +1,57 @@
+effect many {
+  each(lista: List<A>): A
+}
+
+function all(program: () -> () ! many ! E) : () ! E {
+  handle program() {
+    case each(lista), resume:
+      function loop(xs) {
+        switch xs {
+          case Cons(y, ys): resume(y); loop(ys)
+          case Nil: ()
+        }
+      }
+      loop(lista)
+    case done(_): ()
+  }
+}
+
+effect iterator<a> {
+  yield(item : a): ()
+}
+function list(program) {
+  handle program() {
+    case yield(x), resume: Cons(x, resume(()))
+    case done(_): Nil
+  }
+}
+type List<A> {
+  Nil
+  Cons(A, List<A>)
+}
+type Pair<A,B> { Pair(A,B) }
+
+effect exception {
+  raise(s: string): a
+}
+function catch(program, hanterare) {
+  handle program() {
+    case raise(s): hanterare(s)
+    case done(x): x
+  }
+}
+main = {
+  list({
+    all({
+      catch({
+        x = each(Cons(1, Cons(2, Cons(3, Nil))))
+        y = each(Cons(1, Cons(2, Cons(3, Nil))))
+        switch x + y {
+          case 3: raise("ignore")
+          case _: ()
+        }
+        yield(Pair(x,y))
+      }, _ => Nil)
+    })
+  })
+}

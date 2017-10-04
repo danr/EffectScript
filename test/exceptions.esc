@@ -1,0 +1,29 @@
+effect exception {
+  raise(s : string): a
+}
+function safediv(x, y) {
+  switch y {
+    case 0 : raise("oops")
+    case _ : x / y
+  }
+}
+type Maybe<A> {
+  Null
+  Just(A)
+}
+function to_maybe(program) {
+  handle program() {
+    case raise(s, resume): Null
+    case done(x): Just(x)
+  }
+}
+
+function catch(program, hanterare) {
+  handle program() {
+    case raise(s, resume): hanterare(s)
+    case done(x): x
+  }
+}
+function main() {
+  to_maybe(() => { safediv(4, 0) })
+}

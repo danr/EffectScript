@@ -11,6 +11,7 @@ import LexEffectScript
 import ParEffectScript
 import PrintEffectScript
 import AbsEffectScript
+import Data.List
 
 import AST
 import Pretty
@@ -26,8 +27,8 @@ import Control.Monad.Writer
 
 type ParseFun a = [Token] -> Err a
 
-run :: String -> IO ()
-run s =
+run :: [String] -> String -> IO ()
+run flags s =
   let ts = myLexer s in
   case pProgram ts of
     Bad s ->
@@ -41,32 +42,34 @@ run s =
          --showTree tree
          --putStrLn (ppShow tree)
          let ast = tr tree
-         putStrLn "\n=== Initial tree ===\n"
-         putStrLn (pretty ast)
-         putStrLn (ppShow ast)
-         putStrLn "\n=== Typed tree ===\n"
+         --putStrLn "\n=== Initial tree ===\n"
+         --putStrLn (pretty ast)
+         --putStrLn (ppShow ast)
+         --putStrLn "\n=== Typed tree ===\n"
          let ast2 = intuitTypes ast
-         putStrLn (pretty ast2)
-         continue ast2
+         --putStrLn (pretty ast2)
+         continue flags ast2
 
-continue :: AST.Expr -> IO ()
-continue e =
+continue :: [String] -> AST.Expr -> IO ()
+continue flags e =
   do
 --     putStrLn (pretty e)
      let puts = tell . (:[])
-     mapM_ putStrLn $ runFresh $ execWriterT $
-       do e_anf <- lift $ anf e
-          puts "\n=== Administrative Normal Form ===\n"
-          puts (pretty e_anf)
-          let (top, m) = valueDeclsOf e_anf
-          let go e0 = do me <- lift $ step top e0
-                         case me of
-                           Nothing -> return ()
-                           Just e' ->
-                             do puts "\n=== Step ===\n"
-                                puts (pretty e')
-                                go e'
-          go m
+     let (final_e, msgs) = runFresh $ runWriterT $
+           do e_anf <- lift $ anf e
+              puts "\n=== Administrative Normal Form ===\n"
+              puts (pretty e_anf)
+              let (top, m) = valueDeclsOf e_anf
+              let go e0 = do me <- lift $ step top e0
+                             case me of
+                               Nothing -> return e0
+                               Just e' ->
+                                 do puts "\n=== Step ===\n"
+                                    puts (pretty e')
+                                    go e'
+              go m
+     when ("-steps" `elem` flags) $ mapM_ putStrLn msgs
+     putStrLn (pretty final_e)
 
           {-
           x <- fresh "x"
@@ -97,7 +100,7 @@ showTree tree =
 
 main :: IO ()
 main =
-  do args <- getArgs
-     run =<< case args of
+  do (flags, args) <- partition (("-" ==) . take 1) <$> getArgs
+     run flags =<< case args of
        []     -> getContents
        [file] -> readFile file

@@ -35,7 +35,7 @@ function incr(x) {
 }
 
 function main() {
-  puts(show(sum({map(onetwo, incr)})))
+  show(sum({map(onetwo, incr)}))
   // puts(show(sum(onetwo)))
 }
 

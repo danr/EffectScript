@@ -53,15 +53,16 @@ instance Tr BNF.Con where
     BNF.Con name ts optt      -> AST.Con (tr name) []      (tr ts) (tr optt)
     BNF.ConEx name ns ts optt -> AST.Con (tr name) (tr ns) (tr ts) (tr optt)
 
+{-
 instance Tr BNF.Rhs where
   type To BNF.Rhs = AST.Expr
   tr r = case r of
     BNF.ExprRhs e  -> tr e
     BNF.DeclRhs ds -> trDecls ds
+    -}
 
 trDecls :: [BNF.Decl] -> AST.Expr
 trDecls [] = error "Declarations not ending in an expression"
-trDecls [d@(BNF.Expr BNF.Let{})] = trDecls [d, BNF.Expr BNF.Unit]
 trDecls [BNF.Expr e] = tr e
 trDecls (d:ds) = d' `AST.Seq` trDecls ds
   where
@@ -69,7 +70,7 @@ trDecls (d:ds) = d' `AST.Seq` trDecls ds
       BNF.Algebraic dh cs      -> AST.Algebraic (tr dh) (tr cs)
       BNF.Effect dh cs         -> AST.Effect (tr dh) (tr cs)
       BNF.Alias dh t           -> AST.Alias (tr dh) (tr t)
-      BNF.Expr (BNF.Let e rhs) -> AST.Let (trPat e) (tr rhs)
+      BNF.Let e rhs            -> AST.Let (trPat e) (tr rhs)
       BNF.Expr e ->
         case tr e of
           AST.Done fn@AST.Function{AST.fn_name=Just n} -> AST.Let (AST.NameP n) (AST.Done fn)
@@ -87,7 +88,6 @@ instance Tr BNF.Expr where
     BNF.Handle e cs         -> let f:as = tr (Commas e)
                                in  AST.Switch (Just f) (map AST.unrestricted as) (tr cs)
     BNF.Switch e cs         -> AST.Switch Nothing (map AST.unrestricted (tr (Commas e))) (tr cs)
-    BNF.NSwitch cs          -> AST.Switch Nothing [] (tr cs)
 
     BNF.ApplyT e ts         -> AST.unrestricted (tr e) `AST.TyApply` tr ts
     BNF.Apply e es          -> foldl AST.uApply (tr e) (map (tr . Commas) es)
@@ -108,13 +108,14 @@ instance Tr BNF.Expr where
     BNF.Gt e1 e2            -> AST.Done (AST.Bin AST.Gt) `AST.uApply` [tr e1, tr e2]
     BNF.Ge e1 e2            -> AST.Done (AST.Bin AST.Ge) `AST.uApply` [tr e1, tr e2]
 
-    BNF.Lambda e rhs        -> AST.Done $ AST.Lambda (trPats e) (tr rhs)
-    BNF.Let{}               -> error $ "Let in illegal position" ++ show e0
-                               -- AST.Let (trPat e) (tr rhs)
+    BNF.Lambda e (BNF.Lambda0 ds) -> AST.Done $ AST.Lambda (trPats e) (trDecls ds)
+    BNF.Lambda e rhs              -> AST.Done $ AST.Lambda (trPats e) (tr rhs)
+    BNF.Lambda0 ds                -> AST.Done $ AST.Lambda [] (trDecls ds)
     BNF.Signature e t       -> AST.Sig (tr e) (tr t)
-    BNF.Lambda0 ds          -> AST.Done $ AST.Lambda [] (trDecls ds)
 
     BNF.Comma{}             -> error $ "Comma in illegal position" ++ show e0
+    BNF.Par BNF.Unit        -> AST.Done $ AST.Lit AST.Unit
+    BNF.Par e               -> tr e
 
 newtype Commas = Commas BNF.Expr
   deriving (Eq, Ord, Show)
@@ -154,7 +155,7 @@ instance Tr BNF.Lit where
 
 instance Tr BNF.Case where
   type To BNF.Case = AST.Case
-  tr (BNF.Case e ds) = AST.Case (trPats e) (trDecls ds)
+  tr (BNF.Case e ds) = AST.Case (map trPat e) (trDecls ds)
 
 instance Tr BNF.Type where
   type To BNF.Type = AST.Type
