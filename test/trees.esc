@@ -1,0 +1,57 @@
+effect nondet {
+  coin(): bool
+}
+type Tree<A> {
+  Leaf(A)
+  Node(Tree<A>, Tree<A>)
+}
+effect state<S> {
+  get(): S
+  put(S): ()
+}
+function incr() {
+    put(get() + 1)
+}
+function runState2(s0, p) {
+    handle p(), s0 {
+        case get(), s, resume: resume(s, s)
+        case put(s), _, resume: resume((), s)
+        case done(x): x
+    }
+}
+function runState(s0, p) {
+    (handle p() {
+        case get(), resume: s => resume(s)(s)
+        case put(s), resume: _ => resume(())(s)
+        case done(x): _ => x
+    })(s0)
+}
+function runNonDet(p) {
+    handle p() {
+        case coin(), resume: Node(resume(false), resume(true))
+        case done(x): Leaf(x)
+    }
+}
+function walk(t) {
+    switch t {
+        case Leaf(x): incr(); get()
+        case Node(l, r):
+            switch coin() {
+                case false: walk(l)
+                case true: walk(r)
+            }
+
+    }
+}
+tree = runNonDet({
+    switch coin() {
+        case true: coin() coin()
+        case false: coin()
+    }
+})
+main = {
+    runState(0, {
+    runNonDet({
+      walk(tree)
+    })})
+}

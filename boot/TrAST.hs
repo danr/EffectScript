@@ -85,9 +85,11 @@ instance Tr BNF.Expr where
     BNF.NameMono x          -> AST.Done $ AST.Name (tr x)
     BNF.NamePoly x ts       -> AST.Name (tr x) `AST.TyApply` tr ts
     BNF.WildP               -> AST.Done $ AST.Name AST.wildName
-    BNF.Handle e cs         -> let f:as = tr (Commas e)
+    BNF.Handle es cs        -> let f:as = case map tr es of
+                                            [] -> error "Handler without program to handle"
+                                            xs -> xs
                                in  AST.Switch (Just f) (map AST.unrestricted as) (tr cs)
-    BNF.Switch e cs         -> AST.Switch Nothing (map AST.unrestricted (tr (Commas e))) (tr cs)
+    BNF.Switch es cs        -> AST.Switch Nothing (map (AST.unrestricted . tr) es) (tr cs)
 
     BNF.ApplyT e ts         -> AST.unrestricted (tr e) `AST.TyApply` tr ts
     BNF.Apply e es          -> foldl AST.uApply (tr e) (map (tr . Commas) es)

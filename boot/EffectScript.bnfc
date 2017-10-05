@@ -15,7 +15,7 @@ Algebraic. Decl ::= "type" DeclHead "{" [Con] "}";
 Effect.    Decl ::= "effect" DeclHead "{" [Con] "}";
 Alias.     Decl ::= "alias" DeclHead "=" Type;
 Expr.      Decl ::= Expr3;
-Let.       Decl ::= Expr14 "=" Expr4;
+Let.       Decl ::= Expr14 "=" Expr3;
 _.         Decl ::= Decl ";";
 
 Nul.   Con ::= Name OptType;
@@ -30,8 +30,10 @@ NameMono.  Expr14 ::= Name;
 NamePoly.  Expr14 ::= NameK [Type] ">";
 WildP.     Expr14 ::= "_";
 
-Handle.    Expr14 ::= "handle" Expr3 "{" [Case] "}";
-Switch.    Expr14 ::= "switch" Expr3 "{" [Case] "}";
+Handle.    Expr14 ::= "handle" [Expr4] "{" [Case] "}";
+Switch.    Expr14 ::= "switch" [Expr4] "{" [Case] "}";
+
+separator Expr4 ",";
 
 Call.      Expr14 ::= NameP [Expr] ")";
 CallTy.    Expr14 ::= NameK [Type] ">(" [Expr] ")";
@@ -52,9 +54,9 @@ Le.   Expr5  ::= Expr6 "<=" Expr6;
 Gt.   Expr5  ::= Expr6 ">"  Expr6;
 Ge.   Expr5  ::= Expr6 ">=" Expr6;
 
-Lambda.    Expr4  ::= Expr12 "=>" Expr4;
-Lambda0.   Expr4  ::= "{" [Decl] "}";
-Signature. Expr3  ::= Expr4 ":" Type;
+Signature. Expr4  ::= Expr4 ":" Type;
+Lambda.    Expr3  ::= Expr12 "=>" Expr3;
+Lambda0.   Expr3  ::= "{" [Decl] "}";
 Comma.     Expr2  ::= Expr3 "," Expr2 ;
 Unit.      Expr2  ::= ;
 
