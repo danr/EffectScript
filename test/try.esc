@@ -4,13 +4,12 @@ effect exn {
 }
 
 function try(m : string ! exn) {
-  switch next(m) {
-    case throw(msg, k) : puts(msg)
-    case done(s) : puts(s)
+  handle m() {
+    case throw(msg), _: msg
+    case done(s): s
   }
 }
 
 function main() {
-  try({throw("boom")})
-  try({"ok"})
+  try({throw("boom")}) + ", " + try({"ok"})
 }

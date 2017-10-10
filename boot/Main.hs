@@ -38,13 +38,12 @@ run flags s =
          putStrLn s
          exitFailure
     Ok tree ->
-      do --putStrLn "\nParse Successful!"
-         --showTree tree
-         --putStrLn (ppShow tree)
+      do -- putStrLn "\nParse Successful!"
+         -- putStrLn (ppShow tree)
          let ast = tr tree
-         --putStrLn "\n=== Initial tree ===\n"
-         --putStrLn (pretty ast)
-         --putStrLn (ppShow ast)
+         -- putStrLn "\n=== Initial tree ===\n"
+         -- putStrLn (pretty ast)
+         -- putStrLn (ppShow ast)
          --putStrLn "\n=== Typed tree ===\n"
          let ast2 = intuitTypes ast
          --putStrLn (pretty ast2)
@@ -60,6 +59,7 @@ continue flags e =
               puts "\n=== Administrative Normal Form ===\n"
               puts (pretty e_anf)
               let (top, m) = valueDeclsOf e_anf
+              puts ("\n== Top-level declarations ==\n" ++ pretty top)
               let go e0 = do me <- lift $ step top e0
                              case me of
                                Nothing -> return e0
@@ -69,7 +69,9 @@ continue flags e =
                                     go e'
               go m
      when ("-steps" `elem` flags) $ mapM_ putStrLn msgs
-     putStrLn (pretty final_e)
+     case final_e of
+       Done v -> putStrLn (pretty v)
+       _ -> putStrLn (pretty final_e)
 
           {-
           x <- fresh "x"

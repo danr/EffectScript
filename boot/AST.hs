@@ -131,6 +131,7 @@ data Type
 
 
 instanceUniverseBi [t| (Expr, Decl) |]
+instanceUniverseBi [t| (Expr, Value) |]
 instanceUniverseBi [t| ([Expr], Pattern) |]
 instanceUniverseBi [t| ([Pattern], Pattern) |]
 instanceTransformBi [t| (Expr, Expr) |]

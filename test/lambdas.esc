@@ -1,0 +1,28 @@
+
+effect iterator<a> {
+  yield(item : a): ()
+}
+function list(program) {
+  handle program() {
+    case yield(x), resume: Cons(x, resume(()))
+    case done(_): Nil
+  }
+}
+type List<A> {
+  Nil
+  Cons(A, List<A>)
+}
+
+function main() {
+  list({
+    yield((() => { 1 })())
+    yield(({ 2 })())
+    yield(((()) => 3)(()))
+    yield((((())) => 4)(()))
+    yield((((())) => 5)((())))
+    yield((((), ()) => 6)((), ()))
+    yield((0 => 7)(0))
+    yield(((0) => 8)(0))
+    yield(((0, 0) => 9)(0, 0))
+  })
+}

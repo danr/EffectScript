@@ -5,21 +5,21 @@ effect iter<a> {
 
 function map(i: r ! iter<a>, f: a -> b ! e): r ! iter<b> ! e {
   handle i() {
-    case yield(a, k): yield(f(a)) k("unit")
+    case yield(a), k: yield(f(a)) k("unit")
     case done(r): r
   }
 }
 
 function sum(i: r ! iter<int> ! e): int ! e {
   handle i() {
-    case yield(x, k): x + k("unit")
+    case yield(x), k: x + k("unit")
     case done(r): 0
   }
 }
 
 function sum_acc(i: r ! iter<int> ! e): int ! e {
   handle i(), 0 {
-    case yield(x, k), acc: k("unit", x + acc)
+    case yield(x), k, acc: k("unit", x + acc)
     case done(r), acc: acc
   }
 }
@@ -35,7 +35,6 @@ function incr(x) {
 }
 
 function main() {
-  show(sum({map(onetwo, incr)}))
-  // puts(show(sum(onetwo)))
+  sum({map(onetwo, incr)})
 }
 

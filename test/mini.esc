@@ -7,5 +7,5 @@ function mini(x) {
 }
 
 function main() {
-  puts(show(mini(A)))
+  mini(A)
 }

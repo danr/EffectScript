@@ -4,7 +4,7 @@ effect shift<a, e> {
 
 function reset(x) {
   handle x() {
-    case shift(f, k): f(k)
+    case shift(f), k: f(k)
     case done(r): r
   }
 }

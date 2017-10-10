@@ -23,6 +23,8 @@ import qualified Data.Map as M
 import Data.Set (Set)
 import qualified Data.Set as S
 
+import Data.Generics.Geniplate
+
 type WiredBindings = Map Name ([Value] -> Value)
 
 wiredBindings :: WiredBindings
@@ -146,6 +148,15 @@ matches _      _      = Nothing
 just :: Expr -> Fresh (Maybe Expr)
 just = return . Just
 
+deltaRedexes :: Map Name Value -> Expr -> Bool
+deltaRedexes top e = or [ n `M.member` top | Name n <- universeBi e ]
+
+delta :: Map Name Value -> Expr -> Fresh Expr
+delta top =
+  transformExprValueM $ \ case
+    Name n | Just v <- M.lookup n top -> refreshValue v
+    v -> return v
+
 step :: Map Name Value -> Expr -> Fresh (Maybe Expr)
 step top = \ case
   Function Nothing _ ps _ rhs `Apply` vs -> step top (Lambda (map without ps) rhs `Apply` vs)
@@ -162,11 +173,16 @@ step top = \ case
       Just su -> Just <$> subst su rhs
       Nothing -> return Nothing
 
+  e@Done{}  | deltaRedexes top e -> Just <$> delta top e
+  e@Apply{} | deltaRedexes top e -> Just <$> delta top e
+
   DataCon n [] `Apply` vs -> just (Done (DataCon n vs))
 
   Bin b `Apply` vs -> just (Done (binOp b vs))
 
-  Name n `Apply` vs | Just v <- M.lookup n top -> just (v `Apply` vs)
+  Name n `Apply` vs | Just v <- M.lookup n top ->
+    do v' <- refreshValue v
+       just (v' `Apply` vs)
 
   Name n `Apply` vs | Just f <- M.lookup n wiredBindings -> just (Done (f vs))
 

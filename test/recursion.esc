@@ -1,21 +1,17 @@
 
-type iter<a> {
+effect iter<a> {
   yield(a)
-  done(int)
 }
 
 function sum(i: iter<int> ! ()): int {
-  switch i() {
-    case yield(x):
-        sum({done(1)})
-        puts("never reached")
-        "result"
+  handle i() {
+    case yield(x), resume: resume(()) + 1
     case done(r): 2
   }
 }
 
 function main() {
-  puts(show(sum({yield(1)})))
+  sum({yield(1)})
 }
 
 

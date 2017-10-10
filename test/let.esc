@@ -1,0 +1,5 @@
+x = 1
+y = 2
+z = 3
+type T2<a,b> { T2(a,b) }
+main = { T2(x, y + z) }

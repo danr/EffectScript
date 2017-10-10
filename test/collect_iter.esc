@@ -40,16 +40,16 @@ function append<a>(xs: list<a>, ys: list<a>): list<a> {
 
 function state<a>(s0: a, i: r ! state<a> ! e): r ! e {
   handle i(), s0 {
-    case get(k), s: k(s, s)
-    case set(s, k), _: k("unit", s)
+    case get(), s, k: k(s, s)
+    case set(s), _, k: k("unit", s)
     case done(r), s: Pair(s, r)
   }
 }
 
 function collect<a, e, r>(i: r ! iter<a> ! e): list<a> ! e {
   handle i() {
-    case yield(x, k): puts("Yielding: " + show(x)); Cons(x, k("unit"))
-    case flip(k): append(k(False), k(True))
+    case yield(x), k: puts("Yielding: " + show(x)); Cons(x, k("unit"))
+    case flip(), k: append(k(False), k(True))
     case done(_): Nil()
   }
 }
@@ -74,7 +74,9 @@ function main() {
   //puts("Done")
   //puts(show(state(100, () => { collect({ yield(1) }) })))
   //state(100, () => { collect(p) })
-  collect(() => state(100, p))
-
+  Pair(
+    collect({state(100, p)}),
+    state(100,{collect(p)})
+  )
 }
 

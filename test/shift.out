@@ -1,0 +1,3 @@
+Cons(
+  Pair(3, 2),
+  Cons(Pair(3, 4), Cons(Pair(5, 2), Cons(Pair(5, 4), Nil()))))

@@ -136,7 +136,11 @@ trPat :: BNF.Expr -> AST.Pattern
 trPat = pat . tr
 
 trPats :: BNF.Expr -> [AST.Pattern]
-trPats = map pat . tr . Commas
+trPats = map pat . tr . Commas . unParOnce
+
+unParOnce :: BNF.Expr -> BNF.Expr
+unParOnce (BNF.Par e) = e
+unParOnce e = e
 
 pat :: AST.Expr -> AST.Pattern
 pat =

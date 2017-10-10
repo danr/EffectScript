@@ -8,22 +8,28 @@ function safediv(x, y) {
   }
 }
 type Maybe<A> {
-  Null
+  Nothing
   Just(A)
 }
 function to_maybe(program) {
   handle program() {
-    case raise(s, resume): Null
+    case raise(s), resume: Nothing
     case done(x): Just(x)
   }
 }
 
 function catch(program, hanterare) {
   handle program() {
-    case raise(s, resume): hanterare(s)
+    case raise(s), resume: hanterare(s)
     case done(x): x
   }
 }
+type Pair<a, b> {
+  Pair(a, b)
+}
 function main() {
-  to_maybe(() => { safediv(4, 0) })
+  Pair(
+    to_maybe(() => { safediv(4, 0) }),
+    catch(() => { safediv(4, 0) }, s => 123)
+  )
 }

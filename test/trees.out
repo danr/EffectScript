@@ -1,0 +1,3 @@
+Node(
+  Node(Leaf(1), Leaf(2)),
+  Node(Node(Leaf(3), Leaf(4)), Node(Leaf(5), Leaf(6))))

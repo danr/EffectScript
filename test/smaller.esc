@@ -1,29 +1,26 @@
 
 effect iter<a> {
-  yield(a)
+  yield(a): string
 }
 
-function sum(i: r ! iter<int> ! e): int ! e {
-  switch next(i) {
-    case yield(x, k):
-          puts("A: " + show(x))
-          sum({k("first")});
-          puts("B: " + show(x))
-          sum({k("second")});
-          puts("C: " + show(x))
-    case done(r): puts("done") 1
+function walk(i: r ! iter<int> ! e): int ! e {
+  handle i() {
+    case yield(x), k:
+      "\nbegin " + show(x) +
+      k(" first " + show(x)) +
+      "\nmiddle " + show(x) +
+      k(" second " + show(x)) +
+      "\nend " + show(x)
+    case done(r): "\ndone:" + r
   }
 }
 
 function onetwo() {
-    u1 = yield(1)
-    u2 = yield(2)
-    puts("end")
-    2
+  yield(1) + yield(2) + " onetwo done"
 }
 
 function main() {
-  sum(onetwo)
+  walk(onetwo)
 }
 
 

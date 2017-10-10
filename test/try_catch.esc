@@ -1,16 +1,21 @@
 
 effect exn {
-  throw(msg: string)
+  throw(msg: string): ()
 }
 
 function try_catch(m : string ! exn) {
-  switch next(m) {
-    case throw(msg, k): puts(msg); try_catch(k)
+  handle m() {
+    case throw(msg), k: puts(msg); k(())
     case done(s): puts(s)
   }
 }
 
 function main() {
-  try_catch({throw("boom") puts("handlers?") throw("bang") "ok"})
+  try_catch({
+    throw("boom")
+    puts("handlers?")
+    throw("bang")
+    "ok"
+  })
 }
 
