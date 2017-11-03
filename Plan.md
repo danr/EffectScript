@@ -83,7 +83,11 @@ Could introduce `do { decls }` as an expression to allow decls anywhere exprs ar
 
 Assignments without typesignature and without `fn` or `function` are not
 generalized. Rationale: let should not be generalized. Fix for the user: add a typesig
-or use `fn` syntax.
+or use `fn` syntax, or use type argument for lambda syntax:
+
+```typescript
+id = <A>(a: A) => a
+```
 
 #### Switch directly on args, implicit switch
 
@@ -113,6 +117,54 @@ Possible: Identifiers with some spice `[@$!?a-zA-Z_][a-zA-Z0-9_']*[@$!?]?`
 No operator sections.
 
 ### Types & typeclasses
+
+```typescript
+class Eq a {
+  (==): (a, a) => Bool
+}
+
+class Ord a requires Eq a {
+  (<): (a, a) => Bool
+}
+
+class Add a {
+  (+): (a, a) => a
+}
+
+class Zero a {
+  zero: a
+}
+
+alias Monoid a = (Add a, Zero a)
+
+class Mul a requires Add a {
+  (*): (a, a) => a
+}
+
+class Unit a requires Monoid a {
+  unit: a
+}
+
+alias Ring a = (Monoid a, Mul a, Unit a)
+
+class Neg a requires Monoid a {
+  (-): (a, a) => a
+}
+// or negate
+
+alias Num a = (Ring a, Sub a)
+
+class Div a {
+  (/): (a, a) => a
+}
+// or invert
+
+alias Rational a = (Num a, Div a)
+
+class Mod a {
+  mod: (a, a) => a
+}
+```
 
 Types are written in haskell-style without parens
 Crocodiles `<`, `>` may be used for now, but could be repurposed for variants.
