@@ -46,6 +46,14 @@
 
 ## Syntax
 
+* Parsing via PEG with support for left recursion
+   - [http://citeseerx.ist.psu.edu/viewdoc/summary?doi=10.1.1.81.293](Packrat Parsers Can Support Left Recursion, 2008)
+   - Using PEG we get no conflict between `{ .. }` as record or lambda body.
+   - Parsing requires memory linear in the length of the string (times the number of productions)
+     whereas LR(1) only requires memory linear in the maximum tree depth. The linear memory should be OK though since the AST anyway is already linear in the size of the program.
+   - Fun fact: mixfix operators and operator sections just work
+      - Idea: restrict mixfix operators to non-alphanumeric identifiers
+
 ### Types
 
 Quantification only possible on function arrow.
@@ -475,3 +483,23 @@ which will make it easy to call foreign code and hard-wire different kinds of ha
 ## To learn
 
 Complete and Easy Bidirectional Typechecking for Higher-Rank Polymorphism
+
+## Compilation to C
+
+* [C as an intermediate language by yosefk.com](http://yosefk.com/blog/c-as-an-intermediate-language.html)
+* [Duane Rettig: LISP to C vs machine level, 1998](https://groups.google.com/forum/#!msg/comp.lang.lisp/wTJ1i77ORHI/TgRoMEYq05YJ)
+* [No Assembly Required: Compiling Standard ML to C, 1990](http://citeseerx.ist.psu.edu/viewdoc/summary?doi=10.1.1.43.7510)
+* [Compiling Higher-Order Languages into Fully Tail-Recursive Portable C, 1997](http://citeseerx.ist.psu.edu/viewdoc/summary?doi=10.1.1.48.8788)
+* [Compiling Mercury to high-level C code, 2001](http://citeseerx.ist.psu.edu/viewdoc/summary?doi=10.1.1.19.7865)
+* [Bigloo Papers and Reports](https://www-sop.inria.fr/mimosa/fp/Bigloo/bigloo-5.html#Papers-&-Reports)
+* [Readscheme.org: Compiling Scheme to C](http://library.readscheme.org/page8.html)
+
+## To review
+
+* Alternative haskell preludes
+* Alternative haskell numeric typeclass hierarchies
+* Well-designed stdlibs:
+    - Racket
+    - Go
+    - Rust
+
