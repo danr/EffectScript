@@ -14,6 +14,12 @@ add-highlighter -group / regions -default code effectscript \
     literal       "`"  (?<!\\)(\\\\)*`         '' \
     comment       //   '$'                     '' \
     comment       /\*  \*/                     ''
+    #balancedPar   \b\w+\h*\( \) \(          \
+
+#add-highlighter -group /effectscript/balancedPar regions -default call urf loop \( \) \(
+
+#add-highlighter -group /effectscript/balancedPar/urf/call regex (\w+)\h*\( 1:keyword
+#add-highlighter -group /effectscript/balancedPar/urf/loop ref effectscript
 
 add-highlighter -group /effectscript/double_string fill string
 add-highlighter -group /effectscript/single_string fill string
@@ -25,7 +31,18 @@ add-highlighter -group /effectscript/code regex \$\w* 0:variable
 add-highlighter -group /effectscript/code regex \b(false|true)\b 0:value
 add-highlighter -group /effectscript/code regex \b(boolean|string|number|u?int|integer|nat|[iu]\d+)\b 0:type
 
-add-highlighter -group /effectscript/code regex \b(alias|type|effect|function|switch|case|handle)\b 0:keyword
+add-highlighter -group /effectscript/code regex \b(alias|type|effect|fn|function|switch|case|match|handle|interface|instance|inst|trait|class|typeclass|data|record|variant|where)\b 0:keyword
+
+# rudimentary support to show function name as keyword in
+#     if (cond) {
+#     while { cond } {
+#     list {
+# incomplete because cond may not include parens
+#add-highlighter -group /effectscript/code regex \b(\w+)\h*[(][^()\n]*[)]\h*[{]\h*\n 1:keyword
+#add-highlighter -group /effectscript/code regex \b(\w+)\h*[{] 1:keyword
+
+add-highlighter -group /effectscript/code regex ^\h*\b(\w+)\h+[(] 1:keyword
+add-highlighter -group /effectscript/code regex ^\h*\b(\w+)\h+[{] 1:keyword
 
 
 # Commands
