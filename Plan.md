@@ -100,6 +100,7 @@ or use `fn` syntax, or use type argument for lambda syntax:
 id = <A>(a: A) => a
 ```
 
+
 #### match
 
 ```typescript
@@ -215,6 +216,30 @@ itself in `f`s type parameters.
 Q: Associated types without type equality?
 
 Postpone MPTC
+
+### Named arguments
+
+No real point in having named arguments when there is a record system easily accessible, ie
+
+Prefer this:
+```
+server({
+    port: 8080,
+    routes: {
+        "/": root,
+        "/cxn": cxn
+    }
+})
+```
+
+Over this:
+
+```
+server(port=8080, routes={
+    "/": root,
+    "/cxn": cxn
+})
+```
 
 #### Local instances
 
