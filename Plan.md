@@ -287,27 +287,29 @@ if(a) { ds } { ds2 } = if(a)(ds)(ds2)
 
 nb: There is nothing like
 
-```foreach(xs) x => {
+```
+foreach(xs) x => {
     body[x]
-}```
+}
+```
 
 because both of these are available:
 
 * push
-    ```
-    list {
-        x = each(xs)
-        body[x]
-    }
-    ```
+```
+list {
+    x = each(xs)
+    body[x]
+}
+```
 
 * pull
-    ```
-    foreach(xs) {
-        x = slurp()
-        body[x]
-    }
-    ```
+```
+foreach(xs) {
+    x = slurp()
+    body[x]
+}
+```
 
 ### polymorphic record projection
 
