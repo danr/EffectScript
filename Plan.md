@@ -51,7 +51,7 @@
    - Using PEG we get no conflict between `{ .. }` as record or lambda body.
    - Parsing requires memory linear in the length of the string (times the number of productions)
      whereas LR(1) only requires memory linear in the maximum tree depth. The linear memory should be OK though since the AST anyway is already linear in the size of the program.
-   - Fun fact: mixfix operators and operator sections just work
+   - Fun fact: mixfix operators and operator sections _just work_
       - Idea: restrict mixfix operators to non-alphanumeric identifiers
 
 ### Types
@@ -62,15 +62,18 @@ Rationale: cannot have polymorphic constant.
 ```<A>(A, A) -> Bool```
 
 Effects only possible on function arrow:
-Rationale: canno have effectful constants
+Rationale: cannot have effectful constants
 
-```<Eq A>(A, A) ->!console Bool```
+```
+<Eq A>(A, A) -> Bool !console
+(List a, a -> Bool ! e) -> List a ! e
+```
 
 ### Label effects
 
 Can label effects to be able to refer to them:
 
-```() ->!<count: state<int>, depth: state<int>> Tree```
+```() -> Tree !{count: state<int>, depth: state<int>}```
 
 Now we can use `count.put(1)` and `depth.modify(x => x + 1)` etc
 
@@ -97,12 +100,31 @@ or use `fn` syntax, or use type argument for lambda syntax:
 id = <A>(a: A) => a
 ```
 
+#### match
+
+```typescript
+function append<a>(xs: list<a>, ys: list<a>): list<a> {
+  case xs {
+    Cons(u,us) -> Cons(u,append(us,ys))
+    Nil -> ys
+  }
+}
+
+function state<a>(s0: a, i: r ! state<a> ! e): r ! e {
+  handle i(), s0 {
+    get(),   s, k -> k(s, s)
+    set(s),  _, k -> k("unit", s)
+    done(r), s    -> Pair(s, r)
+  }
+}
+```
+
 #### Switch directly on args, implicit switch
 
 ```
 fn map(xs, f) {
-    case Nil: Nil
-    case Cons(x, xs): Cons(f(x), map(xs,f))
+  Nil -> Nil
+  Cons(x, xs) -> Cons(f(x), map(xs,f))
 }
 ```
 
@@ -255,13 +277,37 @@ koka-style
 if(a) { ds } { ds2 } = if(a, ds, ds2)
 ```
 
-or
+not:
 
 ```
 if(a) { ds } { ds2 } = if(a)(ds)(ds2)
 ```
 
-Leaning towards the first: don't encourage too much curry
+(Rationale: don't encourage too much curry)
+
+nb: There is nothing like
+
+```foreach(xs) x => {
+    body[x]
+}```
+
+because both of these are available:
+
+* push
+    ```
+    list {
+        x = each(xs)
+        body[x]
+    }
+    ```
+
+* pull
+    ```
+    foreach(xs) {
+        x = slurp()
+        body[x]
+    }
+    ```
 
 ### polymorphic record projection
 
@@ -270,6 +316,40 @@ With brackets
     { [k]: e }
 
     s[k]
+
+### Record update
+
+`{ k <op> = <rhs> }`
+
+```
+{ x + = 1 }
+{ x ~ = increment }
+```
+
+where `(~) : (A, A -> A) -> A`
+
+Alternative syntaxes:
+
+```
+{ x +: 1 }
+{ x ~: increment }
+```
+
+Would have to disallow `:` in operator names, at least in trailing position
+
+Assignment could be:
+
+```
+{ x = 1 }
+```
+
+With this we get:
+
+```
+  { x ~: { y ~: increment } }({ x: { y: 41, a: 1 }, b: 2 })
+=
+  { x: { y: 42, a: 1 }, b: 2 }
+```
 
 ### where
 
@@ -486,13 +566,21 @@ Complete and Easy Bidirectional Typechecking for Higher-Rank Polymorphism
 
 ## Compilation to C
 
-* [C as an intermediate language by yosefk.com](http://yosefk.com/blog/c-as-an-intermediate-language.html)
-* [Duane Rettig: LISP to C vs machine level, 1998](https://groups.google.com/forum/#!msg/comp.lang.lisp/wTJ1i77ORHI/TgRoMEYq05YJ)
-* [No Assembly Required: Compiling Standard ML to C, 1990](http://citeseerx.ist.psu.edu/viewdoc/summary?doi=10.1.1.43.7510)
-* [Compiling Higher-Order Languages into Fully Tail-Recursive Portable C, 1997](http://citeseerx.ist.psu.edu/viewdoc/summary?doi=10.1.1.48.8788)
+* [Compiling Higher-Order Languages into Fully Tail-Recursive Portable C, 1993](http://citeseerx.ist.psu.edu/viewdoc/summary?doi=10.1.1.48.8788)
 * [Compiling Mercury to high-level C code, 2001](http://citeseerx.ist.psu.edu/viewdoc/summary?doi=10.1.1.19.7865)
 * [Bigloo Papers and Reports](https://www-sop.inria.fr/mimosa/fp/Bigloo/bigloo-5.html#Papers-&-Reports)
 * [Readscheme.org: Compiling Scheme to C](http://library.readscheme.org/page8.html)
+
+* [C as an intermediate language by yosefk.com](http://yosefk.com/blog/c-as-an-intermediate-language.html)
+    - Excellent
+    - `#line`
+    - `gdb` integration
+
+* [No Assembly Required: Compiling Standard ML to C, 1990](http://citeseerx.ist.psu.edu/viewdoc/summary?doi=10.1.1.43.7510)
+    - Seems shallow
+
+* [Duane Rettig: LISP to C vs machine level, 1998](https://groups.google.com/forum/#!msg/comp.lang.lisp/wTJ1i77ORHI/TgRoMEYq05YJ)
+    - Seems irrelevant
 
 ## To review
 
