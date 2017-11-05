@@ -1,0 +1,40 @@
+
+effect iter<a> {
+    yield(item: a): ()
+}
+
+type Pair<a, b> {
+  Pair(a, b)
+}
+
+type List<A> {
+  Nil
+  Cons(A, List<A>)
+}
+
+function zip(i, j) {
+    handle i, Nothing {
+        case done(_): Nil()
+        case yield(x), Just(next_j), next_i: next_j((), next_i, x)
+        case yield(x), Nothing, next_i:
+            handle j(), next_i, x {
+                case done(_): Nil()
+                case yield(y), next_i, x, next_j:
+                    Cons(Pair(x, y), next_i((), Just(next_j)))
+            }
+    }
+}
+
+main = {
+    i = {
+        yield(1)
+        yield(2)
+        yield(3)
+    }
+    j = {
+        yield(8)
+        yield(6)
+        yield(4)
+    }
+    zip(i, j)
+}
