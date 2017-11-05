@@ -568,6 +568,8 @@ Complete and Easy Bidirectional Typechecking for Higher-Rank Polymorphism
 
 ## Compilation to C
 
+* [Equality saturation](http://www.cs.cornell.edu/~ross/publications/eqsat/)
+* [Compiling Tree Transforms to Operate on Packed Representations, ECOOP 2017](http://recurial.com/wp-content/uploads/2017/06/ecoop_submitted_5_17.pdf)
 * [Compiling Higher-Order Languages into Fully Tail-Recursive Portable C, 1993](http://citeseerx.ist.psu.edu/viewdoc/summary?doi=10.1.1.48.8788)
 * [Compiling Mercury to high-level C code, 2001](http://citeseerx.ist.psu.edu/viewdoc/summary?doi=10.1.1.19.7865)
 * [Bigloo Papers and Reports](https://www-sop.inria.fr/mimosa/fp/Bigloo/bigloo-5.html#Papers-&-Reports)
