@@ -265,6 +265,8 @@ Not so terribly important because we have reader effect for this
 
 Python one-element tuple solves syntax conflict `(T,)`
 
+Tuples should be rows, indirectly argumented for by Lennart Augustsson in his lightning talk "Inductive Tuples".
+
 ### GADTs
 
 Postpone, but allow ExistentialQuantification.
